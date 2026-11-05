@@ -76,44 +76,35 @@ def evaluate(code, name, df, scan_start):
     if len(valid) < 2:
         return None, "ema_not_ready"
 
-    # A formal signal requires a Vegas-zone touch on an earlier daily bar,
-    # followed by a later daily close on either side of EMA12.
+    # State machine: an observation touch must occur first. Only a later
+    # completed daily candle can confirm relative to EMA12.
     signals = []
     start_ts = pd.Timestamp(scan_start)
-    eligible = valid.index[valid["date"] >= start_ts].tolist()
-    for i in eligible:
-        if i < 1:
+    pending_zone = None
+    for i, row in valid.iterrows():
+        if row["date"] < start_ts:
             continue
-        row = valid.iloc[i]
-        prior = valid.iloc[:i]
-        zone_touches = []
+        touched = []
         for label, x, y in (("中锋", 144, 169), ("红峰", 576, 676)):
             lo = min(row[f"ema{x}"], row[f"ema{y}"])
             hi = max(row[f"ema{x}"], row[f"ema{y}"])
             if row["low"] <= hi and row["high"] >= lo:
-                zone_touches.append(label)
-        if not zone_touches:
+                touched.append(label)
+        if touched:
+            pending_zone = {"date": row["date"].date().isoformat(),
+                            "zones": touched}
             continue
-        # Require a prior candle's touch; today's touch cannot confirm itself.
-        prior_touch = False
-        for _, p in prior.iterrows():
-            for x, y in ((144, 169), (576, 676)):
-                lo = min(p[f"ema{x}"], p[f"ema{y}"])
-                hi = max(p[f"ema{x}"], p[f"ema{y}"])
-                if p["low"] <= hi and p["high"] >= lo:
-                    prior_touch = True
-                    break
-            if prior_touch:
-                break
-        if prior_touch:
+        if pending_zone is not None and i > 0:
             signals.append({
-                "date": row["date"].date().isoformat(),
+                "observation_date": pending_zone["date"],
+                "confirmation_date": row["date"].date().isoformat(),
                 "code": code, "name": name,
                 "close": round(float(row["close"]), 4),
                 "ema12": round(float(row["ema12"]), 4),
-                "observation_zone": ",".join(zone_touches),
+                "observation_zone": ",".join(pending_zone["zones"]),
                 "close_vs_ema12": "上方" if row["close"] > row["ema12"] else "下方",
             })
+            pending_zone = None
     # Rank quality for universe selection using recent traded value and 1y return.
     recent = valid.tail(250)
     amount = float(recent["amount"].tail(20).median()) if "amount" in recent else 0.0

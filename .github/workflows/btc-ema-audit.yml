@@ -1,0 +1,39 @@
+name: BTC EMA Audit
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: btc-ema-audit
+  cancel-in-progress: false
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout sandbox only
+        uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+      - name: Run deterministic tests
+        run: python -m unittest discover -s tests -v
+      - name: Download Bitget candles and compare EMA
+        run: python scripts/ema_audit.py --start-days 183 --warmup-days 365
+      - name: Upload result package
+        uses: actions/upload-artifact@v4
+        with:
+          name: btc-ema-audit-${{ github.run_number }}
+          path: results/
+          if-no-files-found: error
+          retention-days: 30

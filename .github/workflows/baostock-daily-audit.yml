@@ -42,7 +42,7 @@ jobs:
       - name: Run deterministic tests
         run: python -m unittest tests.test_baostock_daily_audit -v
       - name: Fetch Baostock daily data and audit
-        run: python scripts/baostock_daily_audit.py --code "${{ inputs.code }}" --years "${{ inputs.years }}"
+        run: python scripts/baostock_daily_audit.py --code "${{ github.event.inputs.code || 'sh.600519' }}" --years "${{ github.event.inputs.years || '5' }}"
       - name: Upload audit package
         uses: actions/upload-artifact@v4
         with:

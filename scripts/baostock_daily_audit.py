@@ -46,6 +46,8 @@ def query_daily(code: str, start: str, end: str, adjustflag: str) -> pd.DataFram
 
 
 def ema_sma_seed(values: pd.Series, span: int) -> pd.Series:
+    if span < 1:
+        raise ValueError("EMA span must be positive")
     arr = values.to_numpy(dtype=float)
     out = np.full(len(arr), np.nan, dtype=float)
     valid = np.isfinite(arr)

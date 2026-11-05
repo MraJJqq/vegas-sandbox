@@ -86,7 +86,11 @@ def fetch_candles(granularity: str, start_ms: int, end_ms: int) -> pd.DataFrame:
             oldest = min(int(row[0]) for row in parsed)
             if len(parsed) < PAGE_LIMIT or oldest <= chunk_start:
                 break
-            next_end = oldest - 1
+            # Keep a one-candle overlap: Bitget rounds endTime down to the
+            # interval boundary and treats it as an exclusive upper bound.
+            # Moving to oldest + interval includes the boundary candle in the
+            # next page; timestamp deduplication removes the intentional overlap.
+            next_end = oldest + interval
             if next_end >= page_end:
                 raise RuntimeError(f"Pagination stalled for {granularity} at {utc_iso(oldest)}")
             page_end = next_end

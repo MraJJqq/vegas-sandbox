@@ -1,0 +1,46 @@
+name: Baostock A-share Daily Data Audit
+
+on:
+  workflow_dispatch:
+    inputs:
+      code:
+        description: "One A-share symbol, e.g. sh.600519"
+        required: true
+        default: "sh.600519"
+      years:
+        description: "History years for EMA676 warm-up"
+        required: true
+        default: "5"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: baostock-a-share-audit
+  cancel-in-progress: false
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout sandbox only
+        uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+      - name: Install audit dependencies
+        run: pip install baostock pandas numpy
+      - name: Run deterministic tests
+        run: python -m unittest tests.test_baostock_daily_audit -v
+      - name: Fetch Baostock daily data and audit
+        run: python scripts/baostock_daily_audit.py --code "${{ inputs.code }}" --years "${{ inputs.years }}"
+      - name: Upload audit package
+        uses: actions/upload-artifact@v4
+        with:
+          name: baostock-a-share-audit-${{ github.run_number }}
+          path: results/baostock-a-share/
+          if-no-files-found: error
+          retention-days: 30

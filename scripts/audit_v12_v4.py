@@ -47,9 +47,9 @@ assert len(v4_symbols) == 27, f"V4 symbol count is {len(v4_symbols)}"
 assert v12_symbols == v4_symbols, f"V12/V4 universe mismatch: V12-only={v12_symbols-v4_symbols}, V4-only={v4_symbols-v12_symbols}"
 
 assert "if report.get(\"scan_status\")!=\"complete\"" in scanner
-assert "report[\"symbols_ok\"]==report[\"symbols_total\"]" in scanner
+assert "report.get(\"symbols_ok\")==report.get(\"symbols_total\")" in scanner
 assert "return 0 if report.get(\"scan_status\")==\"complete\"" in scanner
-assert "x.get(\"date\")==day" in state and "candle_timestamp_ms" in state
+assert "existing.get(\"date\")==day" in state and "candle_timestamp_ms" in state
 assert "BARK_PENDING_PATH" in bark and "uncertain" in bark and "retryable" in bark
 assert "RECOVERY_LOCK_TIMEOUT_MINUTES" in watchdog and "recovery_slot" in watchdog
 assert "concurrency:" in workflow and "cancel-in-progress: false" in workflow

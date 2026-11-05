@@ -1,6 +1,12 @@
 name: Baostock A-share Daily Data Audit
 
 on:
+  push:
+    branches: [main]
+    paths:
+      - 'scripts/baostock_daily_audit.py'
+      - 'tests/test_baostock_daily_audit.py'
+      - '.github/workflows/baostock-daily-audit.yml'
   workflow_dispatch:
     inputs:
       code:

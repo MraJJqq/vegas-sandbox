@@ -1,25 +1,21 @@
-# Vegas Sandbox — BTC EMA Audit
+# Vegas CN — A-share Research Sandbox
 
-独立实验仓库，只用于研究与验证。不会连接或修改 V12、V4 的运行配置。
+本仓库现仅用于 A 股 Vegas 日线数据研究、计算验证与实验。
 
-## 本次实验
-- 标的：Bitget USDT 永续 BTCUSDT
-- 评估窗口：运行时向前 184 天
-- 预热数据：评估窗口之前最多 365 天（交易所可提供多少就使用多少）
-- K线：1H、4H；仅保留已收盘K线
-- 对比：V12 旧版 EWM 初始化、V12 PR #8 的 SMA 初始化、V4 的 SMA 初始化
-- 额外检查：只用评估窗口数据初始化时，EMA 对历史起点的敏感度
+## 当前实验范围
+- 市场：沪深 A 股
+- 数据源：Baostock
+- K线周期：日线（1D）
+- 历史预热：3 年
+- Vegas 均线：EMA12、EMA144、EMA169、EMA576、EMA676
+- 当前审计样本：贵州茅台（sh.600519）
+- 自动化：仅保留手动触发及相关代码变更触发的数据审计；不发送 Bark，不部署交易系统。
 
-## 运行
-首次加入工作流的 push 会触发一次运行；以后也可在 Actions 手动运行。
-工作流不设 schedule，不发送 Bark，不部署，不访问 V12/V4 写接口。
-报告与原始K线 CSV 作为 Actions artifact 保存。
+## 信号规则
+- 中锋区域：EMA144 / EMA169
+- 红峰区域：EMA576 / EMA676
+- 过滤线：EMA12
+- 观察与后续收盘确认逻辑尚处于沙盒验证阶段，不代表正式上线。
 
-## 重要限制
-V4 的 EMA 参考公式来自 assets/js/indicators/ema-v4.js：
-首 N 根 close 的算术平均作为初值，之后按 alpha=2/(N+1) 递推。
-V12 旧公式来自 V12 signal_rules.py 的 pandas ewm(span, adjust=False, min_periods=span)。
-本实验验证计算公式和 Bitget K线输入上的数值差异，不把 EMA 数值对齐误称为交易所图表端直接读数比对。
-
-## Isolation
-This repository has no scheduled workflow, no Bark token, and no deployment target.
+## 隔离约束
+本仓库不连接、不修改 V4 或 V12，不包含美股、Bitget BTC EMA 审计实验。

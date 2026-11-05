@@ -5,6 +5,7 @@ import csv
 import json
 import sys
 import time
+import urllib.error
 import urllib.parse
 import urllib.request
 from datetime import datetime, timezone
@@ -59,11 +60,24 @@ def request_page(start_ms: int, end_ms: int, granularity: str) -> list:
     }
     url = API + "?" + urllib.parse.urlencode(params)
     req = urllib.request.Request(url, headers={"User-Agent": "vegas-sandbox-ema-audit/1.0"})
-    with urllib.request.urlopen(req, timeout=30) as response:
-        payload = json.loads(response.read().decode("utf-8"))
-    if payload.get("code") != "00000":
-        raise RuntimeError(f"Bitget API error for {granularity}: {payload}")
-    return payload.get("data") or []
+    for attempt in range(7):
+        try:
+            with urllib.request.urlopen(req, timeout=45) as response:
+                payload = json.loads(response.read().decode("utf-8"))
+            if payload.get("code") != "00000":
+                raise RuntimeError(f"Bitget API error for {granularity}: {payload}")
+            return payload.get("data") or []
+        except urllib.error.HTTPError as exc:
+            if exc.code not in (429, 500, 502, 503, 504) or attempt == 6:
+                raise
+            retry_after = exc.headers.get("Retry-After")
+            try:
+                delay = float(retry_after) if retry_after else min(60.0, 2.0 ** attempt)
+            except ValueError:
+                delay = min(60.0, 2.0 ** attempt)
+            print(f"Bitget HTTP {exc.code}; retrying in {delay:.1f}s (attempt {attempt + 1}/7)", flush=True)
+            time.sleep(delay)
+    raise RuntimeError("Bitget request retries exhausted")
 
 
 def fetch_candles(granularity: str, start_ms: int, end_ms: int) -> pd.DataFrame:
@@ -94,9 +108,9 @@ def fetch_candles(granularity: str, start_ms: int, end_ms: int) -> pd.DataFrame:
             if next_end >= page_end:
                 raise RuntimeError(f"Pagination stalled for {granularity} at {utc_iso(oldest)}")
             page_end = next_end
-            time.sleep(0.06)
+            time.sleep(0.15)
         chunk_start = chunk_end
-        time.sleep(0.06)
+        time.sleep(0.15)
 
     rows = [collected[k] for k in sorted(collected)]
     frame = pd.DataFrame(rows, columns=["timestamp", "open", "high", "low", "close", "base_volume", "quote_volume"])

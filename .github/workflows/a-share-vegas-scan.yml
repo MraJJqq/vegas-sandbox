@@ -1,0 +1,43 @@
+name: A-share Vegas Manual Scan
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'scripts/a_share_scanner.py'
+      - 'tests/test_a_share_scanner.py'
+      - '.github/workflows/a-share-vegas-scan.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: a-share-vegas-scan
+  cancel-in-progress: false
+
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    timeout-minutes: 360
+    steps:
+      - name: Checkout A-share sandbox
+        uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+      - name: Install Baostock dependencies
+        run: pip install baostock pandas numpy
+      - name: Run tests
+        run: python -m unittest tests.test_a_share_scanner tests.test_baostock_daily_audit -v
+      - name: Scan A-share universe
+        run: python scripts/a_share_scanner.py --years 3 --universe-size 2000 --scan-days 365
+      - name: Upload scan results
+        uses: actions/upload-artifact@v4
+        with:
+          name: a-share-vegas-scan-${{ github.run_number }}
+          path: results/a-share-scan/
+          if-no-files-found: error
+          retention-days: 30

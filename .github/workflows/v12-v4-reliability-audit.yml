@@ -50,6 +50,10 @@ jobs:
         run: |
           find assets/js -name '*.js' -print0 | xargs -0 -n1 node --check
           node --test scripts/v4-*.test.mjs
+      - name: Test sandbox prototypes
+        run: |
+          python -m unittest discover -s tests -v
+          node --test prototypes/v4-signal-validation.test.mjs
       - name: Run cross-repository static contract audit
         run: python scripts/audit_v12_v4.py source
       - name: Upload audit report

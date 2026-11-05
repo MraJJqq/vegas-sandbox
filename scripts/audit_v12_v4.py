@@ -56,7 +56,7 @@ assert "concurrency:" in workflow and "cancel-in-progress: false" in workflow
 assert "V12_LAUNCH_APPROVED" in workflow and "V12_ENABLED" in workflow
 
 assert "schema_version !== 1" in feed
-assert "payload.signal_day !== beijingSignalDay(now())" in feed
+assert "payload.signal_day !== beijingSignalDay(nowMs)" in feed
 assert "payload.symbols_ok !== expected" in feed and "seenSymbols.size !== expected" in feed
 assert "DEFAULT_CACHE_MS = 30_000" in feed
 assert "lifecycle.interval(refreshSignals, 300_000)" in app

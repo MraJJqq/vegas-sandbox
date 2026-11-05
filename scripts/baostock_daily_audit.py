@@ -195,7 +195,7 @@ def build_report(raw: pd.DataFrame, adjusted: pd.DataFrame, calendar: pd.DataFra
         "limitations": [
             "One representative stock only: sh.600519 (贵州茅台).",
             "iTick cross-vendor comparison is not included because no iTick API token was supplied.",
-            "A five-year history is used to give EMA676 a substantial warm-up; the six-month window is separately reported.",
+            "A three-year history is used to give EMA676 a substantial warm-up; the six-month window is separately reported.",
             "Baostock daily data update time may affect the newest trading date; do not treat a same-day missing row before publication as a permanent gap.",
         ],
     }
@@ -211,7 +211,7 @@ def build_report(raw: pd.DataFrame, adjusted: pd.DataFrame, calendar: pd.DataFra
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--code", default=CODE)
-    parser.add_argument("--years", type=int, default=5)
+    parser.add_argument("--years", type=int, default=3)
     parser.add_argument("--evaluation-days", type=int, default=184)
     parser.add_argument("--out", default="results/baostock-a-share")
     args = parser.parse_args()

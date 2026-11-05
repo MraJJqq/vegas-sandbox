@@ -16,7 +16,7 @@ on:
       years:
         description: "History years for EMA676 warm-up"
         required: true
-        default: "5"
+        default: "3"
 
 permissions:
   contents: read
@@ -42,7 +42,7 @@ jobs:
       - name: Run deterministic tests
         run: python -m unittest tests.test_baostock_daily_audit -v
       - name: Fetch Baostock daily data and audit
-        run: python scripts/baostock_daily_audit.py --code "${{ github.event.inputs.code || 'sh.600519' }}" --years "${{ github.event.inputs.years || '5' }}"
+        run: python scripts/baostock_daily_audit.py --code "${{ github.event.inputs.code || 'sh.600519' }}" --years "${{ github.event.inputs.years || '3' }}"
       - name: Upload audit package
         uses: actions/upload-artifact@v4
         with:

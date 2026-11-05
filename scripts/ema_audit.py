@@ -193,7 +193,7 @@ def render_markdown(report: dict) -> str:
 
 def main() -> int:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--start-days", type=int, default=183)
+    parser.add_argument("--start-days", type=int, default=184)
     parser.add_argument("--warmup-days", type=int, default=365)
     parser.add_argument("--out", default="results")
     args = parser.parse_args()

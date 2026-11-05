@@ -29,7 +29,7 @@ jobs:
       - name: Run deterministic tests
         run: python -m unittest discover -s tests -v
       - name: Download Bitget candles and compare EMA
-        run: python scripts/ema_audit.py --start-days 183 --warmup-days 365
+        run: python scripts/ema_audit.py --start-days 184 --warmup-days 365
       - name: Upload result package
         uses: actions/upload-artifact@v4
         with:

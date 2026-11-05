@@ -19,7 +19,7 @@ class BarkIdentityTests(unittest.TestCase):
     def test_watchdog_recovery_uses_durable_slot_marker(self):
         a = delivery_identity(self.report, event_name="workflow_dispatch", run_id="100",
                               recovery_slot="recovery:20261105-1600")
-        self.assertEqual(a, "recovery:recovery:20261105-1600")
+        self.assertEqual(a, "recovery:20261105-1600")
 
     def test_invalid_schedule_hour_fails_closed(self):
         report = {**self.report, "started_at": "2026-11-05T15:05:00+08:00"}

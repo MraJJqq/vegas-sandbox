@@ -20,3 +20,6 @@ V4 的 EMA 参考公式来自 assets/js/indicators/ema-v4.js：
 首 N 根 close 的算术平均作为初值，之后按 alpha=2/(N+1) 递推。
 V12 旧公式来自 V12 signal_rules.py 的 pandas ewm(span, adjust=False, min_periods=span)。
 本实验验证计算公式和 Bitget K线输入上的数值差异，不把 EMA 数值对齐误称为交易所图表端直接读数比对。
+
+## Isolation
+This repository has no scheduled workflow, no Bark token, and no deployment target.

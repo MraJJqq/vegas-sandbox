@@ -1,5 +1,7 @@
 name: V12-V4 Reliability Audit (Sandbox Only)
 on:
+  push:
+    branches: [audit/v12-v4-reliability]
   workflow_dispatch:
 permissions:
   contents: read

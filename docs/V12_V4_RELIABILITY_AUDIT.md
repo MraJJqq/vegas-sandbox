@@ -38,6 +38,14 @@
 
 V12 `main` still contains the old Pandas `ewm(adjust=False)` seed. The SMA-seed alignment is in PR #8 (`fix/v12-ema-sma-seed`), which is currently open and draft. This audit does not merge it or alter either formal repository. The BTC sandbox experiment supports practical parity for the tested data window; it is not a proof across every contract and every possible history start.
 
+## Sandbox prototypes added
+
+Two isolated prototypes and regression tests are included on this audit branch only:
+- `prototypes/bark_idempotency.py`: stable scheduled-slot identity, recovery-slot identity, and distinct manual-run identity. It is not wired into the production Bark sender.
+- `prototypes/v4-signal-validation.mjs`: strict validation for contract, timestamp, direction, tunnel list, and duplicate signal identity. It is not wired into the production V4 feed adapter.
+
+The sandbox workflow is configured to run both formal repositories' existing test suites plus these prototype tests and the cross-repository contract checks. The prototype logic was locally exercised: 4 Python tests and 5 Node tests passed. The full GitHub Actions audit result has not yet been observed in this session, so no full-suite pass claim is made.
+
 ## Verdict
 
 The main architecture is sound: complete-scan publication, daily signal accumulation, conservative Bark ambiguity handling, read-only V4 consumption, and lifecycle cleanup are all present.

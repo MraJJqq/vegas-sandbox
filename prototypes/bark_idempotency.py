@@ -15,7 +15,7 @@ def delivery_identity(report: dict, *, event_name: str, run_id: str,
     """
     day = str(report.get("signal_day") or "")
     if event_name == "workflow_dispatch" and recovery_slot:
-        return f"recovery:{recovery_slot}"
+        return recovery_slot if recovery_slot.startswith("recovery:") else f"recovery:{recovery_slot}"
     if event_name == "schedule":
         raw = report.get("started_at")
         if not raw:

@@ -64,8 +64,7 @@ def ema(values, span):
 
 
 def stock_list(day):
-    rs = retry_request(lambda: bs.query_all_stock(day))
-    stocks = frame_from_rs(rs)
+    stocks = retry_request(lambda: frame_from_rs(bs.query_all_stock(day)))
     if stocks.empty:
         raise RuntimeError("Baostock returned no stock universe")
     required = {"code", "tradeStatus", "code_name"}
@@ -96,11 +95,10 @@ def signal_sort_key(signal):
 
 
 def daily_bars(code, start, end):
-    rs = retry_request(lambda: bs.query_history_k_data_plus(
+    df = retry_request(lambda: frame_from_rs(bs.query_history_k_data_plus(
         code, FIELDS, start_date=start, end_date=end,
         frequency="d", adjustflag="2"
-    ))
-    df = frame_from_rs(rs)
+    )))
     if df.empty:
         return df
     for c in ("open", "high", "low", "close", "volume", "amount", "tradestatus"):

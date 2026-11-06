@@ -1,0 +1,30 @@
+name: A-share Vegas Tests
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'scripts/a_share_scanner.py'
+      - 'scripts/baostock_daily_audit.py'
+      - 'tests/**'
+      - '.github/workflows/a-share-tests.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  tests:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout A-share sandbox
+        uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+      - name: Install dependencies
+        run: pip install baostock pandas numpy
+      - name: Run unit tests
+        run: python -m unittest tests.test_a_share_scanner tests.test_baostock_daily_audit -v

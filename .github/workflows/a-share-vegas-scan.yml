@@ -1,12 +1,6 @@
 name: A-share Vegas Manual Scan
 
 on:
-  push:
-    branches: [main]
-    paths:
-      - 'scripts/a_share_scanner.py'
-      - 'tests/test_a_share_scanner.py'
-      - '.github/workflows/a-share-vegas-scan.yml'
   workflow_dispatch:
 
 permissions:

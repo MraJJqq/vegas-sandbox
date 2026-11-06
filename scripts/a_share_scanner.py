@@ -43,12 +43,31 @@ def stock_list(day):
     stocks = frame_from_rs(rs)
     if stocks.empty:
         raise RuntimeError("Baostock returned no stock universe")
+    required = {"code", "tradeStatus", "code_name"}
+    missing = required.difference(stocks.columns)
+    if missing:
+        raise RuntimeError(f"Baostock stock list missing fields: {sorted(missing)}")
+    stocks["code"] = stocks["code"].astype(str)
+    stocks["code_name"] = stocks["code_name"].fillna("").astype(str)
     stocks = stocks[
         stocks["code"].str.startswith(A_SHARE_PREFIXES)
         & (stocks["tradeStatus"].astype(str) == "1")
     ].copy()
     stocks = stocks[~stocks["code_name"].str.contains("ST|退", case=False, na=False)]
     return stocks.drop_duplicates("code").sort_values("code").reset_index(drop=True)
+
+
+def confirmation_side(close, ema12):
+    """Return the EMA12 side for a completed daily close; equality is unconfirmed."""
+    if close > ema12:
+        return "上方"
+    if close < ema12:
+        return "下方"
+    return None
+
+
+def signal_sort_key(signal):
+    return (signal["confirmation_date"], signal["code"], signal["observation_date"])
 
 
 def daily_bars(code, start, end):
@@ -95,6 +114,11 @@ def evaluate(code, name, df, scan_start):
                             "zones": touched}
             continue
         if pending_zone is not None and i > 0:
+            side = confirmation_side(float(row["close"]), float(row["ema12"]))
+            if side is None:
+                # EMA12 equality has no direction; retain the observation until
+                # a later completed daily candle closes clearly above or below.
+                continue
             signals.append({
                 "observation_date": pending_zone["date"],
                 "confirmation_date": row["date"].date().isoformat(),
@@ -102,7 +126,8 @@ def evaluate(code, name, df, scan_start):
                 "close": round(float(row["close"]), 4),
                 "ema12": round(float(row["ema12"]), 4),
                 "observation_zone": ",".join(pending_zone["zones"]),
-                "close_vs_ema12": "上方" if row["close"] > row["ema12"] else "下方",
+                "close_vs_ema12": side,
+                "confirmation_side": side,
             })
             pending_zone = None
     # Rank quality for universe selection using recent traded value and 1y return.
@@ -164,7 +189,7 @@ def main():
         )
         selected = ranked[:args.universe_size]
         signals = [s for stock in selected for s in stock["signals"]]
-        signals.sort(key=lambda x: (x["date"], x["code"]))
+        signals.sort(key=signal_sort_key)
         summary = {
             "generated_at_utc": datetime.now(timezone.utc).isoformat(),
             "source": "Baostock", "market": "沪深A股", "frequency": "1D",
@@ -177,7 +202,7 @@ def main():
             "signal_count": len(signals),
             "signals": signals,
             "selection_method": "active non-ST Shanghai/Shenzhen A-shares; rank by 20-session median turnover and trailing one-year return",
-            "signal_rule": "previous daily bar touches EMA144/169 or EMA576/676 area; a later daily close confirms relative to EMA12",
+            "signal_rule": "daily bar touches EMA144/169 or EMA576/676 area; a later non-touch daily close strictly above/below EMA12 confirms; equality remains pending",
             "limitations": [
                 "Baostock industry classifications are not used as a reliable real-time hot-sector feed.",
                 "Universe ranking uses turnover and trailing trend as a reproducible proxy for representative hot/trending names.",

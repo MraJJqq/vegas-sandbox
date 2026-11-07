@@ -1,9 +1,9 @@
 import unittest
-from unittest.mock import Mock
+from unittest.mock import Mock, patch
 import pandas as pd
 
 from scripts.a_share_scanner import (
-    confirmation_side, ema, evaluate, retry_request, signal_sort_key
+    confirmation_side, ema, evaluate, retry_request, signal_sort_key, stock_list
 )
 
 
@@ -91,6 +91,52 @@ class AShareScannerTests(unittest.TestCase):
         with self.assertRaisesRegex(RuntimeError, "network"):
             retry_request(request, retries=2, sleep=lambda _: None)
         self.assertEqual(request.call_count, 3)
+
+    def test_stock_list_retries_empty_response(self):
+        empty = pd.DataFrame(columns=["code", "tradeStatus", "code_name"])
+        valid = pd.DataFrame([{
+            "code": "sh.600519", "tradeStatus": "1", "code_name": "贵州茅台"
+        }])
+        sleeps = []
+        with patch("scripts.a_share_scanner.bs.query_all_stock", return_value=object()) as query, \
+             patch("scripts.a_share_scanner.frame_from_rs", side_effect=[empty, empty, valid]), \
+             patch("scripts.a_share_scanner.retry_request", side_effect=lambda request: request()):
+            result = stock_list("2026-11-07", empty_retries=2, sleep=sleeps.append)
+        self.assertEqual(result["code"].tolist(), ["sh.600519"])
+        self.assertEqual(query.call_count, 3)
+        self.assertEqual([call.args[0] for call in query.call_args_list], ["2026-11-07"] * 3)
+        self.assertEqual(sleeps, [0.75, 1.5])
+
+    def test_stock_list_falls_back_to_previous_date(self):
+        empty = pd.DataFrame(columns=["code", "tradeStatus", "code_name"])
+        valid = pd.DataFrame([{
+            "code": "sz.000001", "tradeStatus": "1", "code_name": "平安银行"
+        }])
+        responses = [empty, empty, empty, empty, valid]
+        queried_dates = []
+
+        def query(day):
+            queried_dates.append(day)
+            return object()
+
+        with patch("scripts.a_share_scanner.bs.query_all_stock", side_effect=query), \
+             patch("scripts.a_share_scanner.frame_from_rs", side_effect=responses), \
+             patch("scripts.a_share_scanner.retry_request", side_effect=lambda request: request()):
+            result = stock_list(
+                "2026-11-07", empty_retries=3, fallback_days=5, sleep=lambda _: None
+            )
+        self.assertEqual(result["code"].tolist(), ["sz.000001"])
+        self.assertEqual(queried_dates, ["2026-11-07"] * 4 + ["2026-11-06"])
+
+    def test_stock_list_fails_clearly_after_empty_fallback_window(self):
+        empty = pd.DataFrame(columns=["code", "tradeStatus", "code_name"])
+        with patch("scripts.a_share_scanner.bs.query_all_stock", return_value=object()), \
+             patch("scripts.a_share_scanner.frame_from_rs", return_value=empty), \
+             patch("scripts.a_share_scanner.retry_request", side_effect=lambda request: request()):
+            with self.assertRaisesRegex(RuntimeError, "previous 2 calendar days"):
+                stock_list(
+                    "2026-11-07", empty_retries=1, fallback_days=2, sleep=lambda _: None
+                )
 
     def test_signal_sort_uses_existing_fields(self):
         a = {"confirmation_date": "2026-01-02", "code": "sh.600519", "observation_date": "2026-01-01"}

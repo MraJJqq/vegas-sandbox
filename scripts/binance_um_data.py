@@ -205,9 +205,17 @@ def build_report(client: BinanceUMClient, history_bars: int = 800,
         "rest": {"status": "pending"}, "websocket": {"status": "pending"},
         "symbols": {}, "errors": [],
     }
-    client.ping()
-    report["rest"] = {"status": "connected", **client.server_time()}
-    symbol_map = client.symbols()
+    rest_error = None
+    try:
+        client.ping()
+        report["rest"] = {"status": "connected", **client.server_time()}
+        symbol_map = client.symbols()
+    except Exception as exc:
+        rest_error = str(exc)
+        report["rest"] = {"status": "failed", "error": rest_error}
+        report["errors"].append({"stage": "rest_connectivity", "error": rest_error})
+        symbol_map = {}
+
     for symbol in symbols:
         meta = symbol_map.get(symbol)
         item = {
@@ -218,6 +226,9 @@ def build_report(client: BinanceUMClient, history_bars: int = 800,
             "timeframes": {},
         }
         report["symbols"][symbol] = item
+        if rest_error:
+            item["status_note"] = "Not checked because the REST endpoint was inaccessible."
+            continue
         if not meta:
             item["status_note"] = "Not listed in Binance USD-M exchangeInfo; no substitute used."
             continue
@@ -251,7 +262,8 @@ def build_report(client: BinanceUMClient, history_bars: int = 800,
     btc8h = report["symbols"].get("BTCUSDT", {}).get("timeframes", {}).get("8h", {})
     report["overall_status"] = (
         "connected" if report["rest"]["status"] == "connected"
-        and btc8h.get("status") == "ok" else "incomplete")
+        and btc8h.get("status") == "ok"
+        and report["websocket"]["status"] == "connected" else "incomplete")
     return report
 
 

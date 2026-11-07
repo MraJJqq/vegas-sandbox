@@ -181,12 +181,12 @@ def main():
     for sym,name in ASSETS.items():
         bi=bgmap.get(sym); ni=bnmap.get(sym)
         report["instruments"][sym]={"asset":name,"bitget_available":bool(bi),
-          "binance_available":bool(ni),"bitget_type":(bi or {}).get("instrumentType"),
+          "binance_available":False,"bitget_type":(bi or {}).get("instrumentType"),
           "bitget_launch_time":(bi or {}).get("launchTime"),
           "binance_status":"archive_probe" if ni else None,"binance_onboard_date":None}
         if not bi or not ni:
             report["errors"].append({"symbol":sym,"stage":"instrument_check",
-              "error":"Not listed on Bitget or Binance USDT perpetual instrument list"})
+              "error":"Not listed on Bitget USDT-FUTURES instrument list"})
             continue
         starts=[fallback]
         for v in (msval(bi.get("launchTime")),msval(ni.get("onboardDate"))):

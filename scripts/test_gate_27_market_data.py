@@ -67,12 +67,15 @@ def websocket_test():
         ws=websocket.create_connection(WS,timeout=12,enable_multithread=True)
         ws.settimeout(2)
         expected={(name,interval) for _,_,name in INSTRUMENTS for interval in INTERVALS}
-        for name,interval in sorted(expected):
-            ws.send(json.dumps({"time":int(time.time()),"channel":"futures.candlesticks",
-                                "event":"subscribe","payload":[interval,name]}))
+        request_map={}
+        for request_id,(name,interval) in enumerate(sorted(expected), start=1):
+            request_map[request_id]=(name,interval)
+            ws.send(json.dumps({"time":int(time.time()),"id":request_id,
+                                "channel":"futures.candlesticks","event":"subscribe",
+                                "payload":[interval,name]}))
         ack=set()
         deadline=time.time()+60
-        while time.time()<deadline and (len(ack)<len(expected) or len(result["live_updates"])<len(expected)):
+        while time.time()<deadline and (len(ack)<len(expected) or len({k.split(":",1)[0] for k in result["live_updates"]})<len(INSTRUMENTS)):
             try:
                 raw=ws.recv()
             except websocket.WebSocketTimeoutException:
@@ -82,27 +85,33 @@ def websocket_test():
             except Exception: continue
             if msg.get("channel")!="futures.candlesticks": continue
             if msg.get("event")=="subscribe":
-                payload=msg.get("payload") or []
-                if len(payload)>=2:
-                    key=(str(payload[1]),str(payload[0]))
-                    if (key[0],key[1]) in expected and (msg.get("error") is None) and (msg.get("result") or {}).get("status")=="success":
-                        ack.add(key)
-                    elif msg.get("error") or (msg.get("result") or {}).get("status")!="success":
-                        result["errors"].append({"subscription":payload,"error":msg.get("error"),"result":msg.get("result")})
+                request_id=msg.get("id")
+                key=request_map.get(request_id)
+                if key in expected and msg.get("error") is None:
+                    ack.add(key)
+                elif msg.get("error") is not None:
+                    result["errors"].append({"subscription":key,"error":msg.get("error"),"result":msg.get("result")})
             elif msg.get("event")=="update":
-                item=msg.get("result")
-                if isinstance(item,dict):
-                    stream=item.get("n","")
-                    if "_" in stream:
+                items=msg.get("result")
+                if isinstance(items,dict):
+                    items=[items]
+                if isinstance(items,list):
+                    for item in items:
+                        if not isinstance(item,dict): continue
+                        stream=item.get("n","")
+                        if "_" not in stream: continue
                         interval,name=stream.split("_",1)
                         key=(name,interval)
                         if key in expected and all(k in item for k in ("t","o","h","l","c")):
                             result["live_updates"][f"{name}:{interval}"]=item
         result["acknowledged"]=[f"{name}:{interval}" for name,interval in sorted(ack)]
-        result["status"]="live_updates_received" if len(result["live_updates"])==len(expected) else ("partial_live_updates" if result["live_updates"] else "no_live_updates")
-        result["ack_count"]=len(ack)
+        active_instruments={k.split(":",1)[0] for k in result["live_updates"]}
+        result["status"]="all_27_instruments_live" if len(active_instruments)==len(INSTRUMENTS) else ("partial_live_updates" if active_instruments else "no_live_updates")
+        result["acknowledged_count"]=len(ack)
         result["expected_subscriptions"]=len(expected)
         result["live_update_count"]=len(result["live_updates"])
+        result["live_instrument_count"]=len(active_instruments)
+        result["live_instruments"]=sorted(active_instruments)
     except Exception as e:
         result["error"]=str(e)[:600]
     finally:
@@ -126,14 +135,17 @@ def main():
       "contracts_missing":sum(x.get("listed") is False for x in rest_rows),
       "rest_4h_success":sum(x.get("timeframes",{}).get("4h",{}).get("status")=="ok" for x in rest_rows),
       "rest_8h_success":sum(x.get("timeframes",{}).get("8h",{}).get("status")=="ok" for x in rest_rows),
-      "ws_live_updates":report["websocket"].get("live_update_count",0),
-      "ws_expected_updates":len(INSTRUMENTS)*len(INTERVALS)
+      "ws_live_instruments":report["websocket"].get("live_instrument_count",0),
+      "ws_expected_instruments":len(INSTRUMENTS),
+      "ws_acknowledged_streams":report["websocket"].get("acknowledged_count",0),
+      "ws_expected_streams":len(INSTRUMENTS)*len(INTERVALS)
     }
     report["overall_status"]="complete" if (
       report["summary"]["contracts_found"]==27 and
       report["summary"]["rest_4h_success"]==27 and
       report["summary"]["rest_8h_success"]==27 and
-      report["summary"]["ws_live_updates"]==54
+      report["summary"]["ws_live_instruments"]==27 and
+      report["summary"]["ws_acknowledged_streams"]==54
     ) else "partial"
     out=Path("results/gate-27-market-data");out.mkdir(parents=True,exist_ok=True)
     (out/"report.json").write_text(json.dumps(report,ensure_ascii=False,indent=2),encoding="utf-8")
@@ -143,7 +155,8 @@ def main():
       f"- Contracts found: {report['summary']['contracts_found']}/27",
       f"- Native 4H REST: {report['summary']['rest_4h_success']}/27",
       f"- Native 8H REST: {report['summary']['rest_8h_success']}/27",
-      f"- WebSocket live updates: {report['summary']['ws_live_updates']}/54","",
+      f"- WebSocket live instruments: {report['summary']['ws_live_instruments']}/27",
+      f"- WebSocket acknowledged interval streams: {report['summary']['ws_acknowledged_streams']}/54","",
       "| Media logo | Code | Gate contract | Listed | 4H REST | 8H REST | 4H WS | 8H WS |",
       "|---|---|---|---|---|---|---|---|"]
     live=report["websocket"].get("live_updates",{})

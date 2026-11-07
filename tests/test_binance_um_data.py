@@ -1,6 +1,6 @@
 import unittest
 
-from scripts.binance_um_data import BinanceUMClient, ema
+from scripts.binance_um_data import BinanceUMClient, BinanceAccessError, ema
 
 
 class FakeResponse:
@@ -48,6 +48,22 @@ class BinanceClientTests(unittest.TestCase):
         client = BinanceUMClient(session=FakeSession([]))
         with self.assertRaises(ValueError):
             client.klines("BTCUSDT", "8H", 10)
+
+    def test_http_451_is_reported_as_regional_restriction(self):
+        class RestrictedResponse(FakeResponse):
+            status_code = 451
+            ok = False
+            text = "Unavailable for legal reasons"
+
+        class RestrictedSession(FakeSession):
+            def get(self, url, params=None, timeout=None):
+                return RestrictedResponse({})
+
+        client = BinanceUMClient(session=RestrictedSession({}))
+        with self.assertRaises(BinanceAccessError) as caught:
+            client.ping()
+        self.assertEqual(caught.exception.status_code, 451)
+        self.assertIn("regional", str(caught.exception))
 
 
 if __name__ == "__main__":

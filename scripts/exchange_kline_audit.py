@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
 from __future__ import annotations
-import csv, json, math, statistics, time
+import csv, json, math, statistics, time, io, zipfile
 from datetime import datetime, timezone
 from pathlib import Path
 import requests
 
 BG = "https://api.bitget.com"
-BN = "https://fapi.binance.com"
+BN_ARCHIVE = "https://data.binance.vision"
 ASSETS = {"XAUUSDT":"Gold", "BTCUSDT":"Bitcoin", "CLUSDT":"WTI crude oil", "SNDKUSDT":"SanDisk"}
 TF = {
     "4H": (4*3600000, "4H", "4h"),
@@ -85,22 +85,47 @@ def aggregate_8h(hourly):
                     "volume":sum(x["volume"] for x in items if math.isfinite(x["volume"]))})
     return out
 
+def binance_archive_csv(sym, interval, period, kind):
+    url=BN_ARCHIVE+"/data/futures/um/"+kind+"/klines/"+sym+"/"+interval+"/"+sym+"-"+interval+"-"+period+".zip"
+    for attempt in range(3):
+        try:
+            r=S.get(url,timeout=60)
+            if r.status_code==404: return []
+            r.raise_for_status()
+            with zipfile.ZipFile(io.BytesIO(r.content)) as z:
+                names=[n for n in z.namelist() if n.lower().endswith(".csv")]
+                if not names: return []
+                rows=[]
+                for row in csv.reader(io.TextIOWrapper(z.open(names[0]),encoding="utf-8")):
+                    if not row or not row[0].strip().isdigit(): continue
+                    x=candle(row)
+                    if x: rows.append(x)
+                return rows
+        except Exception:
+            if attempt==2: raise
+            time.sleep(2**attempt)
+    return []
+
 def binance_fetch(sym, interval, start, end, step):
     out={}
-    cur=max(0,start-step)
-    while cur<end:
-        data=get(BN+"/fapi/v1/klines",{
-            "symbol":sym,"interval":interval,"startTime":cur,"endTime":end,"limit":1500})
-        if not data: break
-        last=None
-        for x in data:
-            c=candle(x)
-            if c and start<=c["ts"]<end:
-                out[c["ts"]]=c
-                last=c["ts"]
-        if last is None or last+step<=cur: break
-        cur=last+step
-        time.sleep(.08)
+    first=datetime.fromtimestamp(start/1000,timezone.utc).date().replace(day=1)
+    last=datetime.fromtimestamp((end-1)/1000,timezone.utc).date().replace(day=1)
+    today=datetime.now(timezone.utc).date()
+    month=first
+    while month<=last:
+        next_month=(month.replace(day=28)+__import__("datetime").timedelta(days=4)).replace(day=1)
+        if month.year==today.year and month.month==today.month:
+            day=month
+            while day<today:
+                for x in binance_archive_csv(sym,interval,day.isoformat(),"daily"):
+                    if start<=x["ts"]<end: out[x["ts"]]=x
+                day=day+__import__("datetime").timedelta(days=1)
+        else:
+            period=str(month.year)+"-"+str(month.month).zfill(2)
+            for x in binance_archive_csv(sym,interval,period,"monthly"):
+                if start<=x["ts"]<end: out[x["ts"]]=x
+        month=next_month
+        time.sleep(.04)
     return [out[k] for k in sorted(out)]
 
 def ema(values,span):
@@ -141,16 +166,15 @@ def main():
     now=int(time.time()*1000)
     fallback=now-a.max_history_days*86400000
     bgi=get(BG+"/api/v3/market/instruments",{"category":"USDT-FUTURES"})
-    bni=get(BN+"/fapi/v1/exchangeInfo")
-    bgmap={x.get("symbol"):x for x in bgi.get("data",[])}
+    # Use Binance official UM archive: the live REST API returns HTTP 451 in this runner.\n    bni={"symbols":[{"symbol":s,"status":"ARCHIVE_PROBE"} for s in ASSETS]}\n    bgmap={x.get("symbol"):x for x in bgi.get("data",[])}
     bnmap={x.get("symbol"):x for x in bni.get("symbols",[])}
     report={"generated_at_utc":datetime.now(timezone.utc).isoformat(),
       "symbols":ASSETS,"timeframes":list(TF),"ema_spans":list(SPANS),
-      "method":"Same-symbol USDT perpetual market-price candles, UTC aligned; Bitget 8H aggregated from eight consecutive 1H candles; EMA seeded by first-span SMA.",
+      "method":"Same-symbol Bitget USDT-FUTURES and Binance UM futures archive candles, UTC aligned; Bitget 8H aggregated from eight consecutive 1H candles; EMA seeded by first-span SMA.",
       "notes":["Only identical open timestamps are compared; missing candles are counted separately.",
        "OHLC and EMA differences are absolute percentages using Binance as denominator.",
        "Volume is excluded because contract sizing and volume units can differ.",
-       "TradFi perpetual prices may use different indices and off-session pricing mechanisms on each venue.",
+       "TradFi perpetual prices may use different indices and off-session pricing mechanisms on each venue.",\n       "Binance candles use the official data.binance.vision UM futures archive to avoid regional HTTP 451 blocks on the live REST API.",
        "EMA576/EMA676 are reported as unavailable when history is shorter than the span."],
       "instruments":{},"comparisons":[],"errors":[]}
     coverage=[]; ema_rows=[]; detail=[]
@@ -159,7 +183,7 @@ def main():
         report["instruments"][sym]={"asset":name,"bitget_available":bool(bi),
           "binance_available":bool(ni),"bitget_type":(bi or {}).get("instrumentType"),
           "bitget_launch_time":(bi or {}).get("launchTime"),
-          "binance_status":(ni or {}).get("status"),"binance_onboard_date":(ni or {}).get("onboardDate")}
+          "binance_status":"archive_probe" if ni else None,"binance_onboard_date":None}
         if not bi or not ni:
             report["errors"].append({"symbol":sym,"stage":"instrument_check",
               "error":"Not listed on Bitget or Binance USDT perpetual instrument list"})
@@ -241,7 +265,7 @@ def main():
       "- Generated UTC: "+report["generated_at_utc"],
       "- Symbols: XAUUSDT, BTCUSDT, CLUSDT, SNDKUSDT",
       "- Periods: 4H, 8H, 12H, 1D; Vegas EMA12/144/169/576/676",
-      "- 8H: Binance native 8H vs Bitget 1H aggregation, UTC aligned.","",
+      "- 8H: Binance native 8H archive vs Bitget 1H aggregation, UTC aligned.",\n      "- Binance source: official data.binance.vision UM futures archive.","",
       "| Symbol | Period | Bitget bars | Binance bars | Matched | Close mean diff % | Close max diff % |",
       "|---|---:|---:|---:|---:|---:|---:|"]
     for z in report["comparisons"]:

@@ -167,7 +167,7 @@ def main():
     fallback=now-a.max_history_days*86400000
     bgi=get(BG+"/api/v3/market/instruments",{"category":"USDT-FUTURES"})
     # Use Binance official UM archive: the live REST API returns HTTP 451 in this runner.\n    bni={"symbols":[{"symbol":s,"status":"ARCHIVE_PROBE"} for s in ASSETS]}\n    bgmap={x.get("symbol"):x for x in bgi.get("data",[])}
-    bnmap={x.get("symbol"):x for x in bni.get("symbols",[])}
+    bnmap={s:{"symbol":s,"status":"ARCHIVE_PROBE"} for s in ASSETS}
     report={"generated_at_utc":datetime.now(timezone.utc).isoformat(),
       "symbols":ASSETS,"timeframes":list(TF),"ema_spans":list(SPANS),
       "method":"Same-symbol Bitget USDT-FUTURES and Binance UM futures archive candles, UTC aligned; Bitget 8H aggregated from eight consecutive 1H candles; EMA seeded by first-span SMA.",

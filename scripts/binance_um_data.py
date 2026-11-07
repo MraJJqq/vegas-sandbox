@@ -151,10 +151,24 @@ class BinanceUMClient:
             ws = websocket.create_connection(url, timeout=timeout,
                                              enable_multithread=True)
             status = getattr(ws, "status", None)
+            ws.settimeout(timeout)
+            raw = ws.recv()
+            payload = json.loads(raw) if raw else None
             ws.close()
-            return {"connected": True, "url": url, "handshake_status": status}
+            valid = isinstance(payload, dict) and payload.get("e") == "kline"
+            return {
+                "connected": bool(valid), "handshake_connected": True,
+                "message_received": bool(raw), "valid_kline_event": valid,
+                "url": url, "handshake_status": status,
+                "first_event": payload,
+            }
         except Exception as exc:
-            return {"connected": False, "url": url, "error": str(exc)[:500]}
+            try:
+                ws.close()
+            except Exception:
+                pass
+            return {"connected": False, "handshake_connected": False,
+                    "url": url, "error": str(exc)[:500]}
 
     def stream_kline(self, symbol: str, interval: str,
                      on_message: Callable[[dict], None],
@@ -256,14 +270,17 @@ def build_report(client: BinanceUMClient, history_bars: int = 800,
                 item["timeframes"][interval] = {"status": "error", "error": str(exc)}
                 report["errors"].append({
                     "symbol": symbol, "interval": interval, "error": str(exc)[:500]})
-    report["websocket"] = client.websocket_connect("BTCUSDT", "8h")
+    report["websocket"] = client.websocket_connect("BTCUSDT", "8h", timeout=15)
     report["websocket"]["status"] = (
-        "connected" if report["websocket"].get("connected") else "unavailable")
+        "live_data_received" if report["websocket"].get("connected")
+        else "handshake_only_or_unavailable")
     btc8h = report["symbols"].get("BTCUSDT", {}).get("timeframes", {}).get("8h", {})
-    report["overall_status"] = (
-        "connected" if report["rest"]["status"] == "connected"
-        and btc8h.get("status") == "ok"
-        and report["websocket"]["status"] == "connected" else "incomplete")
+    if report["rest"]["status"] == "connected" and btc8h.get("status") == "ok" and report["websocket"].get("connected"):
+        report["overall_status"] = "connected"
+    elif report["websocket"].get("connected"):
+        report["overall_status"] = "live_stream_connected_rest_restricted"
+    else:
+        report["overall_status"] = "incomplete"
     return report
 
 

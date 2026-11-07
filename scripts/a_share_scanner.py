@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import argparse
+import multiprocessing
+from concurrent.futures import ProcessPoolExecutor, as_completed
 import json
 import time
 from datetime import date, timedelta, datetime, timezone
@@ -176,99 +178,93 @@ def evaluate(code, name, df, scan_start, scan_end=None):
     }, "ok"
 
 
-def main():
-    ap = argparse.ArgumentParser()
-    ap.add_argument("--years", type=int, default=3,
-                    help="EMA warm-up history in years before the scan window")
-    ap.add_argument("--universe-size", type=int, default=2000)
-    ap.add_argument("--scan-days", type=int, default=365)
-    ap.add_argument("--out", default="results/a-share-scan")
-    args = ap.parse_args()
-    if args.years < 3 or args.scan_days < 1 or args.universe_size < 1:
-        ap.error("--years must be >= 3; --scan-days and --universe-size must be positive")
 
-    end = date.today()
-    scan_start = end - timedelta(days=args.scan_days)
-    # Fetch warm-up history PLUS the independent scan window.
-    start = scan_start - timedelta(days=365 * args.years + 15)
-    out = Path(args.out)
-    out.mkdir(parents=True, exist_ok=True)
-
+def scan_stock_chunk(payload):
+    """Scan one deterministic stock partition in an isolated Baostock session."""
+    records, start, end, scan_start, scan_end, worker_id = payload
+    # Fetch the active universe once, then scan deterministic partitions using
+    # independent Baostock sessions. This reduces wall-clock time without
+    # changing per-symbol calculations or global ranking.
     login = bs.login()
     if login.error_code != "0":
         raise RuntimeError(f"Baostock login failed: {login.error_code} {login.error_msg}")
     try:
         stocks = stock_list(end.isoformat())
-        evaluated, failures = [], []
-        total = len(stocks)
-        for n, row in stocks.iterrows():
-            code, name = row["code"], row["code_name"]
-            try:
-                df = daily_bars(code, start.isoformat(), end.isoformat())
-                if df.empty:
-                    failures.append({"code": code, "name": name, "reason": "empty"})
-                    continue
-                result, status = evaluate(
-                    code, name, df, scan_start.isoformat(), end.isoformat()
-                )
-                if result:
-                    evaluated.append(result)
-                else:
-                    failures.append({"code": code, "name": name, "reason": status})
-            except Exception as exc:
-                failures.append({"code": code, "name": name, "reason": str(exc)[:240]})
-            if (n + 1) % 100 == 0 or n + 1 == total:
-                print(
-                    f"processed {n+1}/{total}; eligible={len(evaluated)}; "
-                    f"errors={len(failures)}",
-                    flush=True,
-                )
-
-        ranked = sorted(
-            evaluated,
-            key=lambda x: (np.log1p(max(0.0, x["median_amount_20d"]))
-                           * (1.0 + max(-0.5, min(1.5, x["return_1y"])))),
-            reverse=True,
-        )
-        selected = ranked[:args.universe_size]
-        signals = [s for stock in selected for s in stock["signals"]]
-        signals.sort(key=signal_sort_key)
-        reason_counts = {}
-        for item in failures:
-            reason = item["reason"].split(":")[0]
-            reason_counts[reason] = reason_counts.get(reason, 0) + 1
-
-        summary = {
-            "generated_at_utc": datetime.now(timezone.utc).isoformat(),
-            "source": "Baostock", "market": "沪深A股", "frequency": "1D",
-            "warmup_years": args.years, "scan_window_days": args.scan_days,
-            "history_start": start.isoformat(), "scan_start": scan_start.isoformat(),
-            "scan_end": end.isoformat(),
-            "requested_universe_size": args.universe_size,
-            "listed_active_candidates": total,
-            "history_eligible": len(evaluated),
-            "selected_universe_size": len(selected),
-            "universe_target_met": len(selected) == args.universe_size,
-            "failed_or_insufficient": len(failures),
-            "failure_reason_counts": reason_counts,
-            "signal_count": len(signals),
-            "signals": signals,
-            "selection_method": "active non-ST Shanghai/Shenzhen A-shares; rank by 20-session median turnover and true trailing-365-calendar-day return",
-            "signal_rule": "daily bar touches EMA144/169 or EMA576/676 area; a later non-touch daily close strictly above/below EMA12 confirms; equality remains pending",
-            "limitations": [
-                "Baostock industry classifications are not used as a reliable real-time hot-sector feed.",
-                "Universe ranking uses turnover and trailing trend as a reproducible proxy for representative hot/trending names.",
-                "If fewer than the requested 2000 stocks have complete data, the report states the shortfall rather than padding the universe.",
-            ],
-        }
-        (out / "summary.json").write_text(json.dumps(summary, ensure_ascii=False, indent=2), encoding="utf-8")
-        pd.DataFrame(selected).drop(columns=["signals"], errors="ignore").to_csv(out / "universe.csv", index=False)
-        pd.DataFrame(signals).to_csv(out / "signals.csv", index=False)
-        pd.DataFrame(failures).to_csv(out / "failures.csv", index=False)
-        print(json.dumps({k:v for k,v in summary.items() if k != "signals"}, ensure_ascii=False, indent=2), flush=True)
-        print("SIGNALS=" + json.dumps(signals, ensure_ascii=False), flush=True)
     finally:
         bs.logout()
+
+    records = stocks.to_dict("records")
+    worker_count = min(args.workers, max(1, len(records)))
+    chunk_size = (len(records) + worker_count - 1) // worker_count
+    chunks = [
+        records[i:i + chunk_size]
+        for i in range(0, len(records), chunk_size)
+    ]
+    payloads = [
+        (chunk, start.isoformat(), end.isoformat(),
+         scan_start.isoformat(), end.isoformat(), worker_id)
+        for worker_id, chunk in enumerate(chunks, start=1)
+    ]
+
+    evaluated, failures = [], []
+    print(
+        f"Starting {len(records)} active A-share candidates across "
+        f"{len(payloads)} Baostock workers",
+        flush=True,
+    )
+    with ProcessPoolExecutor(
+        max_workers=len(payloads),
+        mp_context=multiprocessing.get_context("spawn"),
+    ) as executor:
+        futures = [executor.submit(scan_stock_chunk, payload) for payload in payloads]
+        for future in as_completed(futures):
+            worker_evaluated, worker_failures = future.result()
+            evaluated.extend(worker_evaluated)
+            failures.extend(worker_failures)
+
+    ranked = sorted(
+        evaluated,
+        key=lambda x: (np.log1p(max(0.0, x["median_amount_20d"]))
+                       * (1.0 + max(-0.5, min(1.5, x["return_1y"])))),
+        reverse=True,
+    )
+    selected = ranked[:args.universe_size]
+    signals = [s for stock in selected for s in stock["signals"]]
+    signals.sort(key=signal_sort_key)
+    reason_counts = {}
+    for item in failures:
+        reason = item["reason"].split(":")[0]
+        reason_counts[reason] = reason_counts.get(reason, 0) + 1
+
+    summary = {
+        "generated_at_utc": datetime.now(timezone.utc).isoformat(),
+        "source": "Baostock", "market": "沪深A股", "frequency": "1D",
+        "warmup_years": args.years, "scan_window_days": args.scan_days,
+        "history_start": start.isoformat(), "scan_start": scan_start.isoformat(),
+        "scan_end": end.isoformat(),
+        "requested_universe_size": args.universe_size,
+        "listed_active_candidates": len(records),
+        "history_eligible": len(evaluated),
+        "selected_universe_size": len(selected),
+        "universe_target_met": len(selected) == args.universe_size,
+        "failed_or_insufficient": len(failures),
+        "failure_reason_counts": reason_counts,
+        "signal_count": len(signals),
+        "signals": signals,
+        "selection_method": "active non-ST Shanghai/Shenzhen A-shares; rank by 20-session median turnover and true trailing-365-calendar-day return",
+        "signal_rule": "daily bar touches EMA144/169 or EMA576/676 area; a later non-touch daily close strictly above/below EMA12 confirms; equality remains pending",
+        "limitations": [
+            "Baostock industry classifications are not used as a reliable real-time hot-sector feed.",
+            "Universe ranking uses turnover and trailing trend as a reproducible proxy for representative hot/trending names.",
+            "If fewer than the requested 2000 stocks have complete data, the report states the shortfall rather than padding the universe.",
+        ],
+    }
+    (out / "summary.json").write_text(json.dumps(summary, ensure_ascii=False, indent=2), encoding="utf-8")
+    pd.DataFrame(selected).drop(columns=["signals"], errors="ignore").to_csv(out / "universe.csv", index=False)
+    pd.DataFrame(signals).to_csv(out / "signals.csv", index=False)
+    pd.DataFrame(failures).to_csv(out / "failures.csv", index=False)
+    print(json.dumps({k:v for k,v in summary.items() if k != "signals"}, ensure_ascii=False, indent=2), flush=True)
+    print("SIGNALS=" + json.dumps(signals, ensure_ascii=False), flush=True)
 
 
 if __name__ == "__main__":

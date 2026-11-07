@@ -1,0 +1,41 @@
+name: Gate market-data connection
+
+on:
+  push:
+    branches:
+      - feature/gate-market-data
+    paths:
+      - scripts/gate_market_data.py
+      - .github/workflows/gate-market-data.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: gate-market-data-probe
+  cancel-in-progress: false
+
+jobs:
+  connect-and-verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout isolated sandbox branch
+        uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install probe dependencies
+        run: python -m pip install --disable-pip-version-check requests websocket-client
+      - name: Probe Gate REST native 4H/8H and live WebSocket
+        run: python scripts/gate_market_data.py
+      - name: Upload connection report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: gate-market-data-connection
+          path: results/gate-market-data/
+          if-no-files-found: warn
+          retention-days: 30

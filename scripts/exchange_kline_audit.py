@@ -174,7 +174,8 @@ def main():
       "notes":["Only identical open timestamps are compared; missing candles are counted separately.",
        "OHLC and EMA differences are absolute percentages using Binance as denominator.",
        "Volume is excluded because contract sizing and volume units can differ.",
-       "TradFi perpetual prices may use different indices and off-session pricing mechanisms on each venue.",\n       "Binance candles use the official data.binance.vision UM futures archive to avoid regional HTTP 451 blocks on the live REST API.",
+       "TradFi perpetual prices may use different indices and off-session pricing mechanisms on each venue.",
+        "Binance candles use the official data.binance.vision UM futures archive to avoid regional HTTP 451 blocks on the live REST API.",
        "EMA576/EMA676 are reported as unavailable when history is shorter than the span."],
       "instruments":{},"comparisons":[],"errors":[]}
     coverage=[]; ema_rows=[]; detail=[]

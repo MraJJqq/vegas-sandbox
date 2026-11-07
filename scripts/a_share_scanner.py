@@ -65,10 +65,46 @@ def ema(values, span):
     return pd.Series(out, index=values.index)
 
 
-def stock_list(day):
-    stocks = retry_request(lambda: frame_from_rs(bs.query_all_stock(day)))
-    if stocks.empty:
-        raise RuntimeError("Baostock returned no stock universe")
+def stock_list(day, *, empty_retries=3, fallback_days=10, sleep=time.sleep):
+    """Fetch the latest available active-stock universe, tolerating empty non-trading-day responses."""
+    requested = pd.Timestamp(day).date()
+    last_empty_day = None
+
+    # An empty successful response is often transient; retry the requested date
+    # with bounded backoff before falling back to recent calendar dates.
+    for attempt in range(empty_retries + 1):
+        stocks = retry_request(lambda: frame_from_rs(bs.query_all_stock(requested.isoformat())))
+        if not stocks.empty:
+            break
+        last_empty_day = requested.isoformat()
+        if attempt < empty_retries:
+            delay = REQUEST_BACKOFF_SECONDS * (2 ** attempt)
+            print(
+                f"Baostock returned an empty stock universe for {last_empty_day}; "
+                f"retrying ({attempt + 1}/{empty_retries}) in {delay:.2f}s",
+                flush=True,
+            )
+            sleep(delay)
+    else:
+        stocks = pd.DataFrame()
+        # query_all_stock can be empty on weekends/holidays. Walk back to the
+        # most recent date with an available universe rather than aborting.
+        for offset in range(1, fallback_days + 1):
+            candidate = (requested - timedelta(days=offset)).isoformat()
+            print(f"Trying previous stock-universe date: {candidate}", flush=True)
+            candidate_stocks = retry_request(
+                lambda candidate=candidate: frame_from_rs(bs.query_all_stock(candidate))
+            )
+            if not candidate_stocks.empty:
+                stocks = candidate_stocks
+                print(f"Using stock universe dated {candidate}", flush=True)
+                break
+        if stocks.empty:
+            raise RuntimeError(
+                f"Baostock returned no stock universe for {requested.isoformat()} "
+                f"or the previous {fallback_days} calendar days"
+            )
+
     required = {"code", "tradeStatus", "code_name"}
     missing = required.difference(stocks.columns)
     if missing:

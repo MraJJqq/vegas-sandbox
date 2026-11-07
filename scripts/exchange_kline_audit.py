@@ -266,7 +266,8 @@ def main():
       "- Generated UTC: "+report["generated_at_utc"],
       "- Symbols: XAUUSDT, BTCUSDT, CLUSDT, SNDKUSDT",
       "- Periods: 4H, 8H, 12H, 1D; Vegas EMA12/144/169/576/676",
-      "- 8H: Binance native 8H archive vs Bitget 1H aggregation, UTC aligned.",\n      "- Binance source: official data.binance.vision UM futures archive.","",
+      "- 8H: Binance native 8H archive vs Bitget 1H aggregation, UTC aligned.",
+      "- Binance source: official data.binance.vision UM futures archive.","",
       "| Symbol | Period | Bitget bars | Binance bars | Matched | Close mean diff % | Close max diff % |",
       "|---|---:|---:|---:|---:|---:|---:|"]
     for z in report["comparisons"]:

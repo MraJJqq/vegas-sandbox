@@ -63,7 +63,7 @@ class BinanceClientTests(unittest.TestCase):
         with self.assertRaises(BinanceAccessError) as caught:
             client.ping()
         self.assertEqual(caught.exception.status_code, 451)
-        self.assertIn("regional", str(caught.exception))
+        self.assertIn("region", str(caught.exception))
 
 
 if __name__ == "__main__":

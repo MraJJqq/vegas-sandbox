@@ -1,0 +1,40 @@
+name: Exchange K-line comparison audit
+
+on:
+  push:
+    branches:
+      - audit/exchange-kline-gold-btc-oil-sndk
+    paths:
+      - scripts/exchange_kline_audit.py
+      - .github/workflows/exchange-market-audit.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: exchange-market-audit
+  cancel-in-progress: false
+
+jobs:
+  compare:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Checkout isolated audit branch
+        uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install public API client
+        run: python -m pip install --disable-pip-version-check requests
+      - name: Fetch and compare Bitget and Binance candles
+        run: python scripts/exchange_kline_audit.py --max-history-days 730 --output-dir results/exchange-market-audit
+      - name: Upload full comparison report
+        uses: actions/upload-artifact@v4
+        with:
+          name: bitget-binance-gold-btc-oil-sndk-audit
+          path: results/exchange-market-audit/
+          if-no-files-found: error
+          retention-days: 30

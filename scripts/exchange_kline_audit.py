@@ -232,10 +232,11 @@ def main():
                         if xf[label] is not None and yf[label] is not None:
                             checks[label+"_touch_comparable"]+=1
                             if xf[label]!=yf[label]: checks[label+"_touch_mismatches"]+=1
-                    sx="above" if x["close"]>x["ema12"] else "below" if x["close"]<x["ema12"] else "equal"
-                    sy="above" if y["close"]>y["ema12"] else "below" if y["close"]<y["ema12"] else "equal"
-                    checks["ema12_side_comparable"]+=1
-                    if sx!=sy: checks["ema12_side_mismatches"]+=1
+                    sx=None if x["ema12"] is None else "above" if x["close"]>x["ema12"] else "below" if x["close"]<x["ema12"] else "equal"
+                    sy=None if y["ema12"] is None else "above" if y["close"]>y["ema12"] else "below" if y["close"]<y["ema12"] else "equal"
+                    if sx is not None and sy is not None:
+                        checks["ema12_side_comparable"]+=1
+                        if sx!=sy: checks["ema12_side_mismatches"]+=1
                     row={"symbol":sym,"timeframe":tf,
                       "open_time_utc":datetime.fromtimestamp(t/1000,timezone.utc).isoformat()}
                     for f in ("open","high","low","close"):

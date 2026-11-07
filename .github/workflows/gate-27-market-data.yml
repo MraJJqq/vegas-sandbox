@@ -1,0 +1,41 @@
+name: Gate 27-instrument market-data test
+
+on:
+  push:
+    branches:
+      - feature/gate-27-universe-audit
+    paths:
+      - scripts/test_gate_27_market_data.py
+      - .github/workflows/gate-27-market-data.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: gate-27-market-data
+  cancel-in-progress: false
+
+jobs:
+  test-all-instruments:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - name: Checkout isolated audit branch
+        uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install REST and WebSocket clients
+        run: python -m pip install --disable-pip-version-check requests websocket-client
+      - name: Test native 4H/8H REST and live WebSocket for all 27
+        run: python scripts/test_gate_27_market_data.py
+      - name: Upload full 27-instrument report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: gate-27-market-data-report
+          path: results/gate-27-market-data/
+          if-no-files-found: warn
+          retention-days: 30

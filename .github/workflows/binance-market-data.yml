@@ -1,0 +1,45 @@
+name: Binance market-data connection
+
+on:
+  push:
+    branches:
+      - feature/binance-market-data
+    paths:
+      - scripts/binance_um_data.py
+      - tests/test_binance_um_data.py
+      - .github/workflows/binance-market-data.yml
+      - requirements.txt
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: binance-market-data-probe
+  cancel-in-progress: false
+
+jobs:
+  connect-and-verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout isolated sandbox branch
+        uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install dependencies
+        run: python -m pip install --disable-pip-version-check -r requirements.txt
+      - name: Unit tests
+        run: python -m unittest tests.test_binance_um_data -v
+      - name: Probe official Binance USD-M REST and WebSocket
+        run: python scripts/binance_um_data.py --history-bars 800 --output-dir results/binance-market-data
+      - name: Upload connection report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: binance-market-data-connection
+          path: results/binance-market-data/
+          if-no-files-found: warn
+          retention-days: 30

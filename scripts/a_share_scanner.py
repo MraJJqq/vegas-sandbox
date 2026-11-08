@@ -29,8 +29,26 @@ def frame_from_rs(rs):
     return pd.DataFrame(rows, columns=rs.fields)
 
 
-def retry_request(request, *, retries=REQUEST_RETRIES, sleep=time.sleep):
-    """Retry transient Baostock request failures with bounded exponential backoff."""
+def recover_baostock_session():
+    """Replace an expired Baostock session before retrying an unauthenticated request."""
+    try:
+        bs.logout()
+    except Exception:
+        pass
+    login = bs.login()
+    if login.error_code != "0":
+        raise RuntimeError(
+            f"Baostock session re-login failed: {login.error_code} {login.error_msg}"
+        )
+
+
+def is_login_expired(error):
+    message = str(error)
+    return "10001001" in message or "用户未登录" in message or "未登录" in message
+
+
+def retry_request(request, *, retries=REQUEST_RETRIES, sleep=time.sleep, relogin=None):
+    """Retry transient failures; renew an expired Baostock session before retrying."""
     last_error = None
     for attempt in range(retries + 1):
         try:
@@ -39,6 +57,13 @@ def retry_request(request, *, retries=REQUEST_RETRIES, sleep=time.sleep):
             return result
         except Exception as exc:
             last_error = exc
+            if is_login_expired(exc) and relogin is not None:
+                try:
+                    relogin()
+                except Exception as login_exc:
+                    last_error = login_exc
+                    if attempt >= retries:
+                        break
             if attempt >= retries:
                 break
             delay = REQUEST_BACKOFF_SECONDS * (2 ** attempt)
@@ -49,7 +74,6 @@ def retry_request(request, *, retries=REQUEST_RETRIES, sleep=time.sleep):
             )
             sleep(delay)
     raise last_error
-
 
 def ema(values, span):
     a = values.to_numpy(dtype=float)
@@ -73,7 +97,10 @@ def stock_list(day, *, empty_retries=3, fallback_days=10, sleep=time.sleep):
     # An empty successful response is often transient; retry the requested date
     # with bounded backoff before falling back to recent calendar dates.
     for attempt in range(empty_retries + 1):
-        stocks = retry_request(lambda: frame_from_rs(bs.query_all_stock(requested.isoformat())))
+        stocks = retry_request(
+            lambda: frame_from_rs(bs.query_all_stock(requested.isoformat())),
+            relogin=recover_baostock_session,
+        )
         if not stocks.empty:
             break
         last_empty_day = requested.isoformat()
@@ -93,7 +120,8 @@ def stock_list(day, *, empty_retries=3, fallback_days=10, sleep=time.sleep):
             candidate = (requested - timedelta(days=offset)).isoformat()
             print(f"Trying previous stock-universe date: {candidate}", flush=True)
             candidate_stocks = retry_request(
-                lambda candidate=candidate: frame_from_rs(bs.query_all_stock(candidate))
+                lambda candidate=candidate: frame_from_rs(bs.query_all_stock(candidate)),
+                relogin=recover_baostock_session,
             )
             if not candidate_stocks.empty:
                 stocks = candidate_stocks
@@ -133,10 +161,13 @@ def signal_sort_key(signal):
 
 
 def daily_bars(code, start, end):
-    df = retry_request(lambda: frame_from_rs(bs.query_history_k_data_plus(
-        code, FIELDS, start_date=start, end_date=end,
-        frequency="d", adjustflag="2"
-    )))
+    df = retry_request(
+        lambda: frame_from_rs(bs.query_history_k_data_plus(
+            code, FIELDS, start_date=start, end_date=end,
+            frequency="d", adjustflag="2"
+        )),
+        relogin=recover_baostock_session,
+    )
     if df.empty:
         return df
     for c in ("open", "high", "low", "close", "volume", "amount", "tradestatus"):
@@ -235,7 +266,23 @@ def scan_stock_chunk(payload):
                 if result:
                     evaluated.append(result)
                 else:
-                    failures.append({"code": code, "name": name, "reason": status})
+                    failures.append({
+                        "code": code, "name": name, "reason": status,
+                        "history_bars": int((
+                            df["tradestatus"].eq(1) & df["close"].gt(0)
+                            & df["high"].gt(0) & df["low"].gt(0)
+                        ).sum()),
+                        "first_available_date": (
+                            df["date"].min().date().isoformat()
+                            if "date" in df.columns and df["date"].notna().any()
+                            else None
+                        ),
+                        "requested_history_start": start,
+                        "diagnostic": (
+                            "上市时间较晚或历史数据缺失；仅凭当前接口返回无法可靠区分"
+                            if status == "insufficient_history" else ""
+                        ),
+                    })
             except Exception as exc:
                 failures.append({"code": code, "name": name, "reason": str(exc)[:240]})
             if n % 100 == 0 or n == len(records):
@@ -307,9 +354,20 @@ def main():
         "universe_target_met": len(selected) == args.universe_size,
         "failed_or_insufficient": len(failures), "failure_reason_counts": reason_counts,
         "signal_count": len(signals), "signals": signals,
+        "historical_validation": {
+            "mode": "per_stock_historical_signal_replay",
+            "point_in_time_universe": False,
+            "market_wide_backtest": False,
+            "bias_warning": (
+                "历史信号是在当前活跃、非ST股票池中回扫；未使用逐日历史上市/退市及ST状态快照，"
+                "因此存在幸存者偏差，不能解释为当时全市场可交易信号表现。"
+            ),
+        },
         "selection_method": "active non-ST Shanghai/Shenzhen A-shares; rank by 20-session median turnover and true trailing-365-calendar-day return",
         "signal_rule": "daily bar touches EMA144/169 or EMA576/676 area; a later non-touch daily close strictly above/below EMA12 confirms; equality remains pending",
         "limitations": [
+            "Historical signals are replayed only for the currently selected active universe; this is not a point-in-time, survivorship-free market backtest.",
+            "Insufficient-history records include observed valid-bar counts and earliest returned dates, but Baostock results alone cannot distinguish late listing from missing vendor history.",
             "Baostock industry classifications are not used as a reliable real-time hot-sector feed.",
             "Universe ranking uses turnover and trailing trend as a reproducible proxy for representative hot/trending names.",
             "If fewer than the requested 2000 stocks have complete data, the report states the shortfall rather than padding the universe.",

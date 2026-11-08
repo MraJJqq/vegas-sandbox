@@ -86,6 +86,37 @@ class AShareScannerTests(unittest.TestCase):
         self.assertEqual(request.call_count, 2)
         self.assertEqual(len(sleeps), 2)
 
+    def test_retry_request_relogs_after_expired_session(self):
+        request = Mock(side_effect=[RuntimeError("Baostock 10001001: 用户未登录"), "ok"])
+        relogin = Mock()
+        sleeps = []
+        result = retry_request(
+            request, retries=2, sleep=sleeps.append, relogin=relogin
+        )
+        self.assertEqual(result, "ok")
+        self.assertEqual(request.call_count, 2)
+        relogin.assert_called_once_with()
+        self.assertEqual(len(sleeps), 2)
+
+    def test_retry_request_does_not_relogin_for_other_errors(self):
+        request = Mock(side_effect=[RuntimeError("10002007"), "ok"])
+        relogin = Mock()
+        result = retry_request(
+            request, retries=1, sleep=lambda _: None, relogin=relogin
+        )
+        self.assertEqual(result, "ok")
+        relogin.assert_not_called()
+
+    def test_ema_values_before_cutoff_do_not_depend_on_future_bars(self):
+        df = self.make_frame(1100)
+        cutoff = 900
+        past_only = ema(df["close"].iloc[:cutoff], 676)
+        with_future = ema(df["close"], 676).iloc[:cutoff]
+        pd.testing.assert_series_equal(
+            past_only.reset_index(drop=True),
+            with_future.reset_index(drop=True),
+        )
+
     def test_retry_request_stops_after_limit(self):
         request = Mock(side_effect=RuntimeError("network"))
         with self.assertRaisesRegex(RuntimeError, "network"):
@@ -100,7 +131,7 @@ class AShareScannerTests(unittest.TestCase):
         sleeps = []
         with patch("scripts.a_share_scanner.bs.query_all_stock", return_value=object()) as query, \
              patch("scripts.a_share_scanner.frame_from_rs", side_effect=[empty, empty, valid]), \
-             patch("scripts.a_share_scanner.retry_request", side_effect=lambda request: request()):
+             patch("scripts.a_share_scanner.retry_request", side_effect=lambda request, **kwargs: request()):
             result = stock_list("2026-11-07", empty_retries=2, sleep=sleeps.append)
         self.assertEqual(result["code"].tolist(), ["sh.600519"])
         self.assertEqual(query.call_count, 3)
@@ -121,7 +152,7 @@ class AShareScannerTests(unittest.TestCase):
 
         with patch("scripts.a_share_scanner.bs.query_all_stock", side_effect=query), \
              patch("scripts.a_share_scanner.frame_from_rs", side_effect=responses), \
-             patch("scripts.a_share_scanner.retry_request", side_effect=lambda request: request()):
+             patch("scripts.a_share_scanner.retry_request", side_effect=lambda request, **kwargs: request()):
             result = stock_list(
                 "2026-11-07", empty_retries=3, fallback_days=5, sleep=lambda _: None
             )
@@ -132,7 +163,7 @@ class AShareScannerTests(unittest.TestCase):
         empty = pd.DataFrame(columns=["code", "tradeStatus", "code_name"])
         with patch("scripts.a_share_scanner.bs.query_all_stock", return_value=object()), \
              patch("scripts.a_share_scanner.frame_from_rs", return_value=empty), \
-             patch("scripts.a_share_scanner.retry_request", side_effect=lambda request: request()):
+             patch("scripts.a_share_scanner.retry_request", side_effect=lambda request, **kwargs: request()):
             with self.assertRaisesRegex(RuntimeError, "previous 2 calendar days"):
                 stock_list(
                     "2026-11-07", empty_retries=1, fallback_days=2, sleep=lambda _: None

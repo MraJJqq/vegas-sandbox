@@ -1,6 +1,11 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { normalizeSignalFeed } from "../bottom-signal/signal-feed.mjs";
+import { mountBottomSignalTicker } from "../bottom-signal/bottom-signal.mjs";
+
+test("ticker module exports mount function", () => {
+  assert.equal(typeof mountBottomSignalTicker, "function");
+});
 
 const now = Date.parse("2026-11-23T08:00:00+08:00");
 const feed = (overrides = {}) => ({

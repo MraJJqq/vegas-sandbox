@@ -7,12 +7,10 @@
 <style>
 *{box-sizing:border-box}
 html,body{margin:0;min-height:100%;background:transparent;color:#fff;font-family:Arial,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
-body{overflow:hidden}
-#signals{position:fixed;right:max(16px,env(safe-area-inset-right));bottom:max(16px,env(safe-area-inset-bottom));display:flex;flex-wrap:wrap;justify-content:flex-end;align-items:center;gap:7px;max-width:min(560px,calc(100vw - 32px))}
-.signal{display:inline-flex;align-items:center;gap:5px;color:#fff;font-size:13px;font-weight:700;white-space:nowrap;text-shadow:0 1px 4px #000;animation:appear .25s ease both}
-.signal:before{content:"▸";font-size:12px}
-@keyframes appear{from{opacity:0}to{opacity:1}}
-@media(max-width:520px){#signals{right:10px;bottom:10px;max-width:calc(100vw - 20px);gap:5px}.signal{font-size:12px}}
+#signals{display:flex;flex-wrap:wrap;align-items:center;justify-content:flex-start;gap:8px 16px;width:100%;padding:0}
+.signal{display:inline-flex;align-items:center;gap:6px;color:#fff;font-size:14px;font-weight:700;line-height:1.5;white-space:nowrap;text-shadow:0 1px 3px #000}
+.signal:before{content:"▸";font-size:13px}
+@media(max-width:520px){#signals{gap:6px 12px}.signal{font-size:13px}}
 </style>
 </head>
 <body>
@@ -31,11 +29,10 @@ body{overflow:hidden}
       if (!payload || payload.schema_version !== 1 || payload.source !== "Vegasbark" || !Array.isArray(payload.symbols)) return;
       const symbols = [...new Set(payload.symbols.map(value => String(value).trim().toUpperCase()).filter(value => /^[A-Z0-9]{2,20}$/.test(value)))];
       const fragment = document.createDocumentFragment();
-      symbols.forEach((symbol,index) => {
+      symbols.forEach(symbol => {
         const item = document.createElement("span");
         item.className = "signal";
         item.textContent = symbol;
-        item.style.animationDelay = Math.min(index * 30,300) + "ms";
         fragment.appendChild(item);
       });
       container.replaceChildren(fragment);

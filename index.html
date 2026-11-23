@@ -21,6 +21,21 @@ html,body{margin:0;min-height:100%;background:transparent;color:#fff;font-family
   "use strict";
   const FEED_URL = "https://raw.githubusercontent.com/MraJJqq/Vegasbark/main/public/signals.json";
   const container = document.getElementById("signals");
+  const demoSymbols = ["BTCUSDT","ETHUSDT","SOLUSDT","XRPUSDT","DOGEUSDT","BNBUSDT"];
+
+  function render(symbols) {
+    const fragment = document.createDocumentFragment();
+    symbols.forEach(symbol => {
+      const item = document.createElement("span");
+      item.className = "signal";
+      item.textContent = symbol;
+      fragment.appendChild(item);
+    });
+    container.replaceChildren(fragment);
+  }
+
+  // Demo symbols remain visible until real Bark data is available.
+  render(demoSymbols);
 
   async function refresh() {
     try {
@@ -29,17 +44,9 @@ html,body{margin:0;min-height:100%;background:transparent;color:#fff;font-family
       const payload = await response.json();
       if (!payload || payload.schema_version !== 1 || payload.source !== "Vegasbark" || !Array.isArray(payload.symbols)) return;
       const symbols = [...new Set(payload.symbols.map(value => String(value).trim().toUpperCase()).filter(value => /^[A-Z0-9]{2,20}$/.test(value)))];
-      const fragment = document.createDocumentFragment();
-      symbols.forEach(symbol => {
-        const item = document.createElement("span");
-        item.className = "signal";
-        item.textContent = symbol;
-        fragment.appendChild(item);
-      });
-      container.replaceChildren(fragment);
+      if (symbols.length) render(symbols);
     } catch (_) {}
   }
-
   refresh();
   window.setInterval(refresh,15000);
 })();

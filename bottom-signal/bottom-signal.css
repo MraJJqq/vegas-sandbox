@@ -1,0 +1,51 @@
+.vegas-signal-ticker {
+  position: relative;
+  display: block;
+  width: 100%;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  contain: content;
+  -webkit-mask-image: linear-gradient(90deg, transparent 0, #000 3%, #000 97%, transparent 100%);
+  mask-image: linear-gradient(90deg, transparent 0, #000 3%, #000 97%, transparent 100%);
+}
+
+.vegas-signal-track {
+  display: flex;
+  width: max-content;
+  will-change: transform;
+}
+
+.vegas-signal-lane {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 1.25em;
+  padding-inline-end: 1.25em;
+}
+
+.vegas-signal-item {
+  display: inline-block;
+  flex: 0 0 auto;
+  color: inherit;
+  font: inherit;
+  line-height: 1.4;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.vegas-signal-ticker.is-moving .vegas-signal-track {
+  animation: vegas-signal-scroll var(--ticker-duration, 36s) linear infinite;
+}
+
+@keyframes vegas-signal-scroll {
+  from { transform: translate3d(0, 0, 0); }
+  to { transform: translate3d(-50%, 0, 0); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .vegas-signal-ticker.is-moving .vegas-signal-track {
+    animation: none;
+    transform: none;
+  }
+}

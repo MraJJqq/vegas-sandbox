@@ -1,0 +1,119 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#070b12">
+<title>Vegas Signal Sandbox</title>
+<style>
+:root{color-scheme:dark;font-family:Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
+*{box-sizing:border-box}
+html,body{width:100%;height:100%;margin:0;background:#070b12;color:#e8edf5}
+body{overflow:hidden;background:radial-gradient(ellipse at 18% 12%,rgba(31,62,88,.24),transparent 48%),linear-gradient(145deg,#080d16,#05080e 68%,#0b111a)}
+#ambient{position:fixed;inset:0;pointer-events:none;overflow:hidden}
+#ambient:before,#ambient:after{content:"";position:absolute;border:1px solid rgba(130,165,196,.08);border-radius:50%;width:68vmax;height:68vmax;right:-38vmax;bottom:-48vmax;animation:orbit 34s linear infinite}
+#ambient:after{width:92vmax;height:92vmax;right:-52vmax;bottom:-65vmax;animation-duration:52s;opacity:.6}
+@keyframes orbit{to{transform:rotate(360deg)}}
+.signal-panel{position:fixed;right:max(14px,env(safe-area-inset-right));bottom:max(14px,env(safe-area-inset-bottom));width:min(440px,calc(100vw - 28px));max-height:42vh;padding:13px 14px 12px;border:1px solid rgba(138,164,190,.2);border-radius:13px;background:rgba(8,14,23,.88);box-shadow:0 14px 46px rgba(0,0,0,.38),inset 0 1px rgba(255,255,255,.035);backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);display:flex;flex-direction:column;gap:10px;z-index:2}
+.panel-head{display:flex;align-items:center;justify-content:space-between;gap:12px;min-height:20px}
+.brand{font-size:12px;font-weight:750;letter-spacing:.12em;color:#dce6f2;white-space:nowrap}
+.live{display:flex;align-items:center;gap:6px;color:#8293a8;font-size:10px;white-space:nowrap}
+.dot{width:6px;height:6px;border-radius:50%;background:#54c89b;box-shadow:0 0 10px rgba(84,200,155,.7);animation:pulse 1.8s ease-in-out infinite}
+.dot.wait{background:#d3a95c;box-shadow:0 0 8px rgba(211,169,92,.5)}
+@keyframes pulse{50%{opacity:.35;transform:scale(.82)}}
+.signal-list{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px;overflow:hidden;min-height:28px}
+.signal-item{min-width:0;display:flex;align-items:center;gap:8px;padding:7px 9px;border:1px solid rgba(111,143,174,.14);border-radius:7px;background:rgba(255,255,255,.035);font-size:12px;font-weight:700;letter-spacing:.035em;color:#e4ebf4;animation:enter .38s cubic-bezier(.2,.75,.25,1) both}
+.signal-item:before{content:"";width:5px;height:5px;flex:0 0 5px;border-radius:50%;background:#e0b66c;box-shadow:0 0 8px rgba(224,182,108,.45)}
+.signal-item.removing{animation:leave .22s ease forwards}
+@keyframes enter{from{opacity:0;transform:translateY(7px)}to{opacity:1;transform:translateY(0)}}
+@keyframes leave{to{opacity:0;transform:translateY(-5px)}}
+.empty{grid-column:1/-1;padding:10px 8px;text-align:center;color:#aab6c5;font-size:12px;letter-spacing:.04em;border:1px dashed rgba(130,155,180,.18);border-radius:7px}
+.panel-foot{display:flex;justify-content:space-between;gap:10px;color:#6f8094;font-size:9px;letter-spacing:.035em}
+.panel-foot span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+@media(min-width:900px){.signal-list{grid-template-columns:repeat(3,minmax(0,1fr))}.signal-panel{width:min(480px,38vw)}}
+@media(max-width:520px){.signal-panel{right:max(10px,env(safe-area-inset-right));bottom:max(10px,env(safe-area-inset-bottom));width:calc(100vw - 20px);padding:11px 11px 10px;gap:8px}.signal-list{gap:5px}.signal-item{padding:6px 7px;font-size:11px}.brand{font-size:11px}}
+@media(prefers-reduced-motion:reduce){*,*:before,*:after{animation-duration:.01ms!important;animation-iteration-count:1!important;scroll-behavior:auto!important}}
+</style>
+</head>
+<body>
+<div id="ambient" aria-hidden="true"></div>
+<section class="signal-panel" aria-label="Vegas Bark signal feed">
+  <header class="panel-head">
+    <div class="brand">▸▸ VEGAS SIGNAL ◂◂</div>
+    <div class="live"><i class="dot wait" id="status-dot"></i><span id="status-text">CONNECTING</span></div>
+  </header>
+  <div class="signal-list" id="signal-list" aria-live="polite"><div class="empty">正在连接 Bark 信号源…</div></div>
+  <footer class="panel-foot"><span id="updated-at">等待数据</span><span> BARK · LIVE FEED</span></footer>
+</section>
+<script>
+(() => {
+  "use strict";
+  const FEED_URL = "https://raw.githubusercontent.com/MraJJqq/Vegasbark/main/public/signals.json";
+  const POLL_MS = 15000;
+  const list = document.getElementById("signal-list");
+  const dot = document.getElementById("status-dot");
+  const status = document.getElementById("status-text");
+  const updated = document.getElementById("updated-at");
+  let previous = [];
+  let lastGeneratedAt = "";
+
+  function setStatus(online, label) {
+    dot.classList.toggle("wait", !online);
+    status.textContent = label;
+  }
+
+  function normalize(payload) {
+    if (!payload || payload.schema_version !== 1 || payload.source !== "Vegasbark" || !Array.isArray(payload.symbols)) {
+      throw new Error("Unexpected Bark feed schema");
+    }
+    return [...new Set(payload.symbols.map(value => String(value).trim().toUpperCase()).filter(value => /^[A-Z0-9]{2,20}$/.test(value)))];
+  }
+
+  function render(symbols) {
+    if (symbols.length === 0) {
+      list.innerHTML = '<div class="empty">𝐍𝐨 𝐒𝐢𝐠𝐧𝐚𝐥</div>';
+      previous = [];
+      return;
+    }
+    const old = new Set(previous);
+    const fragment = document.createDocumentFragment();
+    symbols.forEach((symbol, index) => {
+      const item = document.createElement("div");
+      item.className = "signal-item";
+      item.textContent = symbol;
+      item.style.animationDelay = Math.min(index * 35, 350) + "ms";
+      if (old.has(symbol)) item.style.animation = "none";
+      fragment.appendChild(item);
+    });
+    list.replaceChildren(fragment);
+    previous = symbols;
+  }
+
+  async function refresh() {
+    try {
+      const response = await fetch(FEED_URL + "?_=" + Date.now(), {cache:"no-store", mode:"cors"});
+      if (!response.ok) throw new Error("HTTP " + response.status);
+      const payload = await response.json();
+      const symbols = normalize(payload);
+      render(symbols);
+      lastGeneratedAt = payload.generated_at || "";
+      const stamp = lastGeneratedAt ? new Date(lastGeneratedAt) : null;
+      updated.textContent = stamp && !Number.isNaN(stamp.getTime()) ? "更新于 " + stamp.toLocaleString("zh-CN",{hour12:false}) : "Bark 数据已连接";
+      setStatus(true, "LIVE");
+    } catch (error) {
+      setStatus(false, error instanceof TypeError ? "WAITING FOR BARK" : "FEED UNAVAILABLE");
+      if (!lastGeneratedAt) {
+        list.innerHTML = '<div class="empty">等待 Bark 首次成功扫描并发布信号</div>';
+        updated.textContent = "自动重试中 · 每 15 秒";
+      } else {
+        updated.textContent = "暂时无法刷新 · 保留最近数据";
+      }
+    }
+  }
+
+  refresh();
+  window.setInterval(refresh, POLL_MS);
+})();
+</script>
+</body>
+</html>

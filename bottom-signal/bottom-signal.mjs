@@ -94,7 +94,9 @@ export function mountBottomSignalTicker({
     const requestController = new AbortController();
     controller = requestController;
     try {
-      const response = await fetch(feedUrl, {
+      const requestUrl = new URL(feedUrl, location.href);
+      requestUrl.searchParams.set("_", String(Date.now()));
+      const response = await fetch(requestUrl.toString(), {
         cache: "no-store",
         headers: { Accept: "application/json" },
         signal: requestController.signal

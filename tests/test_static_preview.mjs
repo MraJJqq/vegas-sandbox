@@ -8,14 +8,17 @@ const [css, moduleSource, page] = await Promise.all([
   readFile(new URL("../index.html", import.meta.url), "utf8")
 ]);
 
-test("signal bar is fixed to bottom center", () => {
+test("signal bar is fixed to bottom-right and respects device safe areas", () => {
   assert.match(css, /position:\s*fixed/);
-  assert.match(css, /left:\s*50%/);
-  assert.match(css, /bottom:/);
-  assert.match(css, /translateX\(-50%\)/);
+  assert.match(css, /right:\s*max\(/);
+  assert.match(css, /bottom:\s*max\(/);
+  assert.match(css, /env\(safe-area-inset-right\)/);
+  assert.match(css, /env\(safe-area-inset-bottom\)/);
+  assert.match(css, /justify-content:\s*flex-end/);
 });
 
-test("signal module contains no scrolling or duplicated ticker lane", () => {
+test("signal sequence wraps at the right without scrolling or duplicated lanes", () => {
+  assert.match(css, /flex-wrap:\s*wrap/);
   assert.doesNotMatch(moduleSource, /requestAnimationFrame|setInterval|ticker-duration|is-moving|vegas-signal-lane|cloneNode/);
   assert.doesNotMatch(css, /@keyframes|animation:/);
 });

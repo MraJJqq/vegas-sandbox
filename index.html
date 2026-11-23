@@ -21,7 +21,7 @@
     }
     .preview-label {
       position: fixed;
-      top: 22px;
+      top: max(22px, env(safe-area-inset-top));
       left: 50%;
       transform: translateX(-50%);
       color: rgba(220, 228, 242, .42);
@@ -31,13 +31,19 @@
     }
     .demo-label {
       position: fixed;
-      left: 50%;
-      bottom: max(66px, calc(env(safe-area-inset-bottom) + 58px));
-      transform: translateX(-50%);
+      right: max(16px, env(safe-area-inset-right));
+      bottom: max(68px, calc(env(safe-area-inset-bottom) + 58px));
       color: rgba(255, 204, 112, .78);
       font-size: 10px;
       letter-spacing: .16em;
+      text-align: right;
       white-space: nowrap;
+    }
+    @media (max-width: 700px) {
+      .demo-label {
+        right: max(10px, env(safe-area-inset-right));
+        bottom: max(58px, calc(env(safe-area-inset-bottom) + 48px));
+      }
     }
   </style>
 </head>

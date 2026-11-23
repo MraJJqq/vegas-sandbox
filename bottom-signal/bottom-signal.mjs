@@ -1,7 +1,7 @@
 import { normalizeSignalFeed } from "./signal-feed.mjs";
 
 const DEFAULT_REFRESH_MS = 60_000;
-const DEFAULT_MAX_AGE_MS = 30 * 60_000;
+const DEFAULT_MAX_AGE_MS = 7 * 60 * 60_000;
 
 export function mountBottomSignalTicker({
   root,

@@ -38,7 +38,7 @@ const ticker = mountBottomSignalTicker({
 });
 ```
 
-销毁时调用 `ticker.destroy()`。模块每 60 秒拉取一次；后台暂停；恢复前台后立即刷新。信号顺序与 Bark 一致，显示时去掉 USDT，不显示方向，不做分类。
+销毁时调用 `ticker.destroy()`。模块每 60 秒拉取一次；信号有效期设为 7 小时以覆盖 Bark 每日扫描间隔；后台暂停；恢复前台后立即刷新。信号顺序与 Bark 一致，显示时去掉 USDT，不显示方向，不做分类。
 
 ## Tests
 

@@ -3,29 +3,25 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<title>Vegas Signal</title>
+<title>Signals</title>
 <style>
 *{box-sizing:border-box}
 html,body{margin:0;min-height:100%;background:transparent;color:#fff;font-family:Arial,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
 body{overflow:hidden}
-.signal-panel{position:fixed;right:max(16px,env(safe-area-inset-right));bottom:max(16px,env(safe-area-inset-bottom));max-width:calc(100vw - 32px);display:flex;flex-direction:column;align-items:flex-end;gap:8px}
-.title{font-size:13px;font-weight:700;letter-spacing:.08em;white-space:nowrap;text-shadow:0 1px 4px #000}
-.content{display:flex;flex-wrap:wrap;justify-content:flex-end;gap:6px;max-width:min(560px,calc(100vw - 32px))}
-.symbol{font-size:13px;font-weight:700;color:#fff;white-space:nowrap;text-shadow:0 1px 4px #000;animation:appear .25s ease both}
+#signals{position:fixed;right:max(16px,env(safe-area-inset-right));bottom:max(16px,env(safe-area-inset-bottom));display:flex;flex-wrap:wrap;justify-content:flex-end;align-items:center;gap:7px;max-width:min(560px,calc(100vw - 32px))}
+.signal{display:inline-flex;align-items:center;gap:5px;color:#fff;font-size:13px;font-weight:700;white-space:nowrap;text-shadow:0 1px 4px #000;animation:appear .25s ease both}
+.signal:before{content:"▸";font-size:12px}
 @keyframes appear{from{opacity:0}to{opacity:1}}
-@media(max-width:520px){.signal-panel{right:10px;bottom:10px}.content{max-width:calc(100vw - 20px);gap:5px}.symbol{font-size:12px}}
+@media(max-width:520px){#signals{right:10px;bottom:10px;max-width:calc(100vw - 20px);gap:5px}.signal{font-size:12px}}
 </style>
 </head>
 <body>
-<section class="signal-panel" aria-label="Vegas signals">
-  <div class="title">▸▸ VEGAS SIGNAL ◂◂</div>
-  <div class="content" id="signals" aria-live="polite"></div>
-</section>
+<div id="signals" aria-live="polite"></div>
 <script>
 (() => {
   "use strict";
   const FEED_URL = "https://raw.githubusercontent.com/MraJJqq/Vegasbark/main/public/signals.json";
-  const signals = document.getElementById("signals");
+  const container = document.getElementById("signals");
 
   async function refresh() {
     try {
@@ -37,12 +33,12 @@ body{overflow:hidden}
       const fragment = document.createDocumentFragment();
       symbols.forEach((symbol,index) => {
         const item = document.createElement("span");
-        item.className = "symbol";
+        item.className = "signal";
         item.textContent = symbol;
         item.style.animationDelay = Math.min(index * 30,300) + "ms";
         fragment.appendChild(item);
       });
-      signals.replaceChildren(fragment);
+      container.replaceChildren(fragment);
     } catch (_) {}
   }
 

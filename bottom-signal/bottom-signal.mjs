@@ -21,25 +21,26 @@ export function mountBottomSignalTicker({
   track.className = "vegas-signal-track";
   const primary = document.createElement("div");
   primary.className = "vegas-signal-lane";
-  const clone = document.createElement("div");
-  clone.className = "vegas-signal-lane";
-  clone.setAttribute("aria-hidden", "true");
-  track.append(primary, clone);
+  const duplicate = document.createElement("div");
+  duplicate.className = "vegas-signal-lane";
+  duplicate.setAttribute("aria-hidden", "true");
+  track.append(primary, duplicate);
   root.append(track);
 
   let stopped = false;
   let timer = null;
   let controller = null;
   let lastSignature = null;
+  let currentSymbols = [];
 
   function renderMessage(message, state) {
     primary.replaceChildren();
-    clone.replaceChildren();
+    duplicate.replaceChildren();
     const label = document.createElement("span");
     label.className = "vegas-signal-item";
     label.textContent = message;
     primary.append(label);
-    clone.append(label.cloneNode(true));
+    duplicate.append(label.cloneNode(true));
     root.classList.remove("is-moving");
     root.dataset.state = state;
     track.style.removeProperty("--ticker-duration");
@@ -47,22 +48,44 @@ export function mountBottomSignalTicker({
   }
 
   function renderSymbols(symbols) {
-    const items = symbols.length ? symbols : ["𝐍𝐨 𝐒𝐢𝐠𝐧𝐚𝐥"];
-    primary.replaceChildren();
-    clone.replaceChildren();
-    for (const symbol of items) {
-      const item = document.createElement("span");
-      item.className = "vegas-signal-item";
-      item.textContent = symbol;
-      primary.append(item);
-      clone.append(item.cloneNode(true));
+    currentSymbols = [...symbols];
+    if (!symbols.length) {
+      renderMessage("𝐍𝐨 𝐒𝐢𝐠𝐧𝐚𝐥", "ready");
+      return;
     }
-    const signature = items.join("|");
-    root.classList.toggle("is-moving", symbols.length > 0);
-    const duration = Math.max(18, Math.min(90, items.join(" ▰ ").length * 0.75));
+
+    primary.replaceChildren();
+    const appendSet = () => {
+      symbols.forEach((symbol, index) => {
+        if (index) {
+          const separator = document.createElement("span");
+          separator.className = "vegas-signal-separator";
+          separator.textContent = "▰";
+          primary.append(separator);
+        }
+        const item = document.createElement("span");
+        item.className = "vegas-signal-item";
+        item.textContent = symbol;
+        primary.append(item);
+      });
+    };
+
+    appendSet();
+    const baseWidth = Math.max(1, primary.scrollWidth);
+    const targetWidth = Math.max(root.clientWidth * 1.5, baseWidth);
+    let copies = 1;
+    while (primary.scrollWidth < targetWidth && copies < 30) {
+      appendSet();
+      copies += 1;
+    }
+
+    duplicate.replaceChildren(...Array.from(primary.children, node => node.cloneNode(true)));
+    const laneWidth = Math.max(1, primary.scrollWidth);
+    const duration = Math.max(18, Math.min(90, laneWidth / 28));
     track.style.setProperty("--ticker-duration", duration + "s");
+    root.classList.add("is-moving");
     root.dataset.state = "ready";
-    lastSignature = signature;
+    lastSignature = symbols.join("|");
   }
 
   async function refresh() {
@@ -79,11 +102,9 @@ export function mountBottomSignalTicker({
       if (!response.ok) throw new Error("Signal feed HTTP " + response.status);
       const feed = normalizeSignalFeed(await response.json(), Date.now(), maxAgeMs);
       if (stopped || requestController.signal.aborted) return;
-      const signature = feed.symbols.length ? feed.symbols.join("|") : "𝐍𝐨 𝐒𝐢𝐠𝐧𝐚𝐥";
+      const signature = feed.symbols.join("|");
       if (signature !== lastSignature || root.dataset.state !== "ready") {
         renderSymbols(feed.symbols);
-      } else {
-        root.dataset.state = "ready";
       }
       root.dataset.updated = feed.generatedAt;
     } catch (error) {
@@ -114,6 +135,15 @@ export function mountBottomSignalTicker({
     }
   }
 
+  const resizeObserver = typeof ResizeObserver === "function"
+    ? new ResizeObserver(() => {
+        if (root.dataset.state === "ready" && currentSymbols.length) {
+          renderSymbols(currentSymbols);
+        }
+      })
+    : null;
+  resizeObserver?.observe(root);
+
   document.addEventListener("visibilitychange", onVisibility);
   root.dataset.state = "loading";
   renderMessage("等待信号数据", "loading");
@@ -126,6 +156,7 @@ export function mountBottomSignalTicker({
       stopped = true;
       clearTimeout(timer);
       controller?.abort();
+      resizeObserver?.disconnect();
       document.removeEventListener("visibilitychange", onVisibility);
       root.replaceChildren();
       delete root.dataset.state;

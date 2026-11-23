@@ -1,16 +1,28 @@
-# Bottom Signal Ticker (Sandbox)
+# Vegas Bottom Signal · Sandbox
 
-独立底部信号模块。此目录不改动 A 股扫描器，也不接触 V9 页面。
+独立静态底部信号展示测试页。仅修改本分支，不接触 V9 页面，也不改动 A 股扫描器。
 
-## Bark feed contract
+## 展示规则
 
-网页只读取 Bark 发布的只读 JSON，不读取手机通知，也不自行计算信号。
+- 固定屏幕底部，水平居中。
+- 静态显示，不滚动、不循环、不复制信号内容。
+- 多个品种按 Bark 扫描输出顺序排列，使用 `▰` 分隔。
+- 不显示方向，不分类，显示品种时去掉 `USDT`。
+- 成功扫描但信号为空时显示 `𝐍𝐨 𝐒𝐢𝐠𝐧𝐚𝐥`。
+- 数据缺失、过期、格式错误或网络失败时显示“等待信号数据”。
 
-预期地址：
+## 沙盒预览
+
+部署完成后：
+
+- 演示布局（模拟品种，明确标注 DEMO）：站点地址追加 `?demo=1`。
+- 实时 Bark 数据：直接打开站点根地址。Bark JSON 尚未发布时会显示“等待信号数据”。
+
+真实 feed：
 
 `https://raw.githubusercontent.com/MraJJqq/Vegasbark/main/public/signals.json`
 
-协议：
+## Bark feed contract
 
 ```json
 {
@@ -21,25 +33,8 @@
 }
 ```
 
-`symbols` 必须保持 Bark 扫描器输出顺序；可以为空数组。空数组仅表示一次成功完成的扫描确实没有信号。缺文件、过期、格式错误或网络失败均显示“等待信号数据”，绝不伪装成 No Signal。
-
-**接入状态：接口消费者与协议已实现；Bark 端尚未发布该 JSON 文件，因此真实数据链路尚未打通。** 完成 Bark 发布端后，再把 feed URL 配入 V9。
-
-## Mount
-
-在宿主页面引入 CSS，并从模块中调用：
-
-```js
-import { mountBottomSignalTicker } from "./bottom-signal/bottom-signal.mjs";
-
-const ticker = mountBottomSignalTicker({
-  root: document.querySelector("#bottom-signal"),
-  feedUrl: "https://raw.githubusercontent.com/MraJJqq/Vegasbark/main/public/signals.json"
-});
-```
-
-销毁时调用 `ticker.destroy()`。模块每 60 秒拉取一次；信号有效期设为 7 小时以覆盖 Bark 每日扫描间隔；后台暂停；恢复前台后立即刷新。信号顺序与 Bark 一致，显示时去掉 USDT，不显示方向，不做分类。
+网页每 60 秒刷新一次；feed 最长有效期 7 小时。后台标签页暂停刷新，回到前台立即刷新。
 
 ## Tests
 
-`node --test tests/test_signal_feed.mjs`
+`node --test tests/test_signal_feed.mjs tests/test_static_preview.mjs`

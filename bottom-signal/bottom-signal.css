@@ -1,51 +1,68 @@
-.vegas-signal-ticker {
-  position: relative;
-  display: block;
-  width: 100%;
-  min-width: 0;
-  overflow: hidden;
-  white-space: nowrap;
-  contain: content;
-  -webkit-mask-image: linear-gradient(90deg, transparent 0, #000 3%, #000 97%, transparent 100%);
-  mask-image: linear-gradient(90deg, transparent 0, #000 3%, #000 97%, transparent 100%);
-}
-
-.vegas-signal-track {
+/* Static, centered signal display. No ticker or scrolling animation. */
+.vegas-signal-bar {
+  position: fixed;
+  z-index: 1000;
+  left: 50%;
+  bottom: max(18px, env(safe-area-inset-bottom));
+  transform: translateX(-50%);
   display: flex;
-  width: max-content;
-  will-change: transform;
-}
-
-.vegas-signal-lane {
-  display: flex;
-  flex: 0 0 auto;
+  justify-content: center;
   align-items: center;
-  gap: 1.25em;
-  padding-inline-end: 1.25em;
+  width: max-content;
+  max-width: calc(100vw - 32px);
+  padding: 10px 18px;
+  box-sizing: border-box;
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 999px;
+  background: rgba(8, 12, 22, 0.82);
+  color: #f4f6fb;
+  font-family: Arial, Helvetica, sans-serif;
+  font-size: 15px;
+  font-weight: 600;
+  line-height: 1.4;
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.28);
 }
 
-.vegas-signal-item {
-  display: inline-block;
+.vegas-signal-content {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 0.72em;
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.vegas-signal-item,
+.vegas-signal-message {
   flex: 0 0 auto;
   color: inherit;
   font: inherit;
-  line-height: 1.4;
+  line-height: inherit;
   user-select: none;
   -webkit-user-select: none;
 }
 
-.vegas-signal-ticker.is-moving .vegas-signal-track {
-  animation: vegas-signal-scroll var(--ticker-duration, 36s) linear infinite;
+.vegas-signal-separator {
+  flex: 0 0 auto;
+  color: #aeb8c9;
+  font-size: 0.82em;
 }
 
-@keyframes vegas-signal-scroll {
-  from { transform: translate3d(0, 0, 0); }
-  to { transform: translate3d(-50%, 0, 0); }
-}
+@media (max-width: 480px) {
+  .vegas-signal-bar {
+    max-width: calc(100vw - 20px);
+    padding: 9px 13px;
+    font-size: 13px;
+  }
 
-@media (prefers-reduced-motion: reduce) {
-  .vegas-signal-ticker.is-moving .vegas-signal-track {
-    animation: none;
-    transform: none;
+  .vegas-signal-content {
+    gap: 0.55em;
   }
 }

@@ -11,81 +11,50 @@ export function mountBottomSignalTicker({
 }) {
   if (!root || !feedUrl) throw new TypeError("root and feedUrl are required");
 
-  root.classList.add("vegas-signal-ticker");
+  root.classList.add("vegas-signal-bar");
   root.setAttribute("role", "status");
   root.setAttribute("aria-live", "polite");
   root.setAttribute("aria-label", "Vegas signals");
   root.replaceChildren();
 
-  const track = document.createElement("div");
-  track.className = "vegas-signal-track";
-  const primary = document.createElement("div");
-  primary.className = "vegas-signal-lane";
-  const duplicate = document.createElement("div");
-  duplicate.className = "vegas-signal-lane";
-  duplicate.setAttribute("aria-hidden", "true");
-  track.append(primary, duplicate);
-  root.append(track);
+  const content = document.createElement("div");
+  content.className = "vegas-signal-content";
+  root.append(content);
 
   let stopped = false;
   let timer = null;
   let controller = null;
-  let lastSignature = null;
-  let currentSymbols = [];
 
   function renderMessage(message, state) {
-    primary.replaceChildren();
-    duplicate.replaceChildren();
+    content.replaceChildren();
     const label = document.createElement("span");
-    label.className = "vegas-signal-item";
+    label.className = "vegas-signal-message";
     label.textContent = message;
-    primary.append(label);
-    duplicate.append(label.cloneNode(true));
-    root.classList.remove("is-moving");
+    content.append(label);
     root.dataset.state = state;
-    track.style.removeProperty("--ticker-duration");
-    lastSignature = null;
   }
 
   function renderSymbols(symbols) {
-    currentSymbols = [...symbols];
+    content.replaceChildren();
     if (!symbols.length) {
       renderMessage("𝐍𝐨 𝐒𝐢𝐠𝐧𝐚𝐥", "ready");
       return;
     }
 
-    primary.replaceChildren();
-    const appendSet = () => {
-      symbols.forEach((symbol, index) => {
-        if (index) {
-          const separator = document.createElement("span");
-          separator.className = "vegas-signal-separator";
-          separator.textContent = "▰";
-          primary.append(separator);
-        }
-        const item = document.createElement("span");
-        item.className = "vegas-signal-item";
-        item.textContent = symbol;
-        primary.append(item);
-      });
-    };
-
-    appendSet();
-    const baseWidth = Math.max(1, primary.scrollWidth);
-    const targetWidth = Math.max(root.clientWidth * 1.5, baseWidth);
-    let copies = 1;
-    while (primary.scrollWidth < targetWidth && copies < 30) {
-      appendSet();
-      copies += 1;
-    }
-
-    duplicate.replaceChildren(...Array.from(primary.children, node => node.cloneNode(true)));
-    const laneWidth = Math.max(1, primary.scrollWidth);
-    const duration = Math.max(18, Math.min(90, laneWidth / 28));
-    track.style.setProperty("--ticker-duration", duration + "s");
-    root.classList.add("is-moving");
+    symbols.forEach((symbol, index) => {
+      if (index) {
+        const separator = document.createElement("span");
+        separator.className = "vegas-signal-separator";
+        separator.textContent = "▰";
+        separator.setAttribute("aria-hidden", "true");
+        content.append(separator);
+      }
+      const item = document.createElement("span");
+      item.className = "vegas-signal-item";
+      item.textContent = symbol;
+      content.append(item);
+    });
     root.dataset.state = "ready";
-    lastSignature = symbols.join("|");
   }
 
   async function refresh() {
@@ -104,10 +73,7 @@ export function mountBottomSignalTicker({
       if (!response.ok) throw new Error("Signal feed HTTP " + response.status);
       const feed = normalizeSignalFeed(await response.json(), Date.now(), maxAgeMs);
       if (stopped || requestController.signal.aborted) return;
-      const signature = feed.symbols.join("|");
-      if (signature !== lastSignature || root.dataset.state !== "ready") {
-        renderSymbols(feed.symbols);
-      }
+      renderSymbols(feed.symbols);
       root.dataset.updated = feed.generatedAt;
     } catch (error) {
       if (error.name === "AbortError" || stopped) return;
@@ -137,15 +103,6 @@ export function mountBottomSignalTicker({
     }
   }
 
-  const resizeObserver = typeof ResizeObserver === "function"
-    ? new ResizeObserver(() => {
-        if (root.dataset.state === "ready" && currentSymbols.length) {
-          renderSymbols(currentSymbols);
-        }
-      })
-    : null;
-  resizeObserver?.observe(root);
-
   document.addEventListener("visibilitychange", onVisibility);
   root.dataset.state = "loading";
   renderMessage("等待信号数据", "loading");
@@ -158,12 +115,11 @@ export function mountBottomSignalTicker({
       stopped = true;
       clearTimeout(timer);
       controller?.abort();
-      resizeObserver?.disconnect();
       document.removeEventListener("visibilitychange", onVisibility);
       root.replaceChildren();
       delete root.dataset.state;
       delete root.dataset.updated;
-      root.classList.remove("vegas-signal-ticker", "is-moving");
+      root.classList.remove("vegas-signal-bar");
     }
   };
 }

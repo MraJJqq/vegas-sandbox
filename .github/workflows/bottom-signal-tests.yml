@@ -5,11 +5,15 @@ on:
     paths:
       - "bottom-signal/**"
       - "tests/test_signal_feed.mjs"
+      - "tests/test_static_preview.mjs"
+      - "index.html"
       - ".github/workflows/bottom-signal-tests.yml"
   pull_request:
     paths:
       - "bottom-signal/**"
       - "tests/test_signal_feed.mjs"
+      - "tests/test_static_preview.mjs"
+      - "index.html"
       - ".github/workflows/bottom-signal-tests.yml"
   workflow_dispatch:
 permissions:
@@ -22,5 +26,5 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: "22"
-      - name: Validate feed contract
-        run: node --test tests/test_signal_feed.mjs
+      - name: Validate feed contract and static preview
+        run: node --test tests/test_signal_feed.mjs tests/test_static_preview.mjs

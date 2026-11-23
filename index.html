@@ -1,0 +1,86 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#080c16">
+  <title>Vegas Bottom Signal · Sandbox</title>
+  <link rel="stylesheet" href="./bottom-signal/bottom-signal.css">
+  <style>
+    * { box-sizing: border-box; }
+    html, body { width: 100%; min-height: 100%; margin: 0; }
+    body {
+      min-height: 100vh;
+      min-height: 100dvh;
+      overflow: hidden;
+      background:
+        radial-gradient(ellipse at 50% 0%, rgba(49, 66, 103, .22), transparent 58%),
+        #080c16;
+      color: #f4f6fb;
+      font-family: Arial, Helvetica, sans-serif;
+    }
+    .preview-label {
+      position: fixed;
+      top: 22px;
+      left: 50%;
+      transform: translateX(-50%);
+      color: rgba(220, 228, 242, .42);
+      font-size: 11px;
+      letter-spacing: .18em;
+      white-space: nowrap;
+    }
+    .demo-label {
+      position: fixed;
+      left: 50%;
+      bottom: max(66px, calc(env(safe-area-inset-bottom) + 58px));
+      transform: translateX(-50%);
+      color: rgba(255, 204, 112, .78);
+      font-size: 10px;
+      letter-spacing: .16em;
+      white-space: nowrap;
+    }
+  </style>
+</head>
+<body>
+  <div class="preview-label">VEGAS · BOTTOM SIGNAL PREVIEW</div>
+  <div id="demo-label" class="demo-label" hidden>DEMO DATA · 非真实信号</div>
+  <div id="bottom-signal" class="vegas-signal-bar" aria-label="Vegas signals">
+    <div class="vegas-signal-content"><span class="vegas-signal-message">等待信号数据</span></div>
+  </div>
+  <script type="module">
+    import { mountBottomSignalTicker } from "./bottom-signal/bottom-signal.mjs";
+
+    const root = document.querySelector("#bottom-signal");
+    const params = new URLSearchParams(location.search);
+    const demo = params.get("demo") === "1";
+    const demoLabel = document.querySelector("#demo-label");
+
+    if (demo) {
+      demoLabel.hidden = false;
+      const symbols = ["BTC", "ETH", "SOL", "XRP"];
+      root.replaceChildren();
+      const content = document.createElement("div");
+      content.className = "vegas-signal-content";
+      symbols.forEach((symbol, index) => {
+        if (index) {
+          const separator = document.createElement("span");
+          separator.className = "vegas-signal-separator";
+          separator.textContent = "▰";
+          content.append(separator);
+        }
+        const item = document.createElement("span");
+        item.className = "vegas-signal-item";
+        item.textContent = symbol;
+        content.append(item);
+      });
+      root.append(content);
+      root.dataset.state = "demo";
+    } else {
+      mountBottomSignalTicker({
+        root,
+        feedUrl: "https://raw.githubusercontent.com/MraJJqq/Vegasbark/main/public/signals.json"
+      });
+    }
+  </script>
+</body>
+</html>

@@ -24,7 +24,7 @@ jobs:
           test -s index.html
           grep -q 'MraJJqq/Vegasbark/main/public/signals.json' index.html
           grep -q 'schema_version !== 1' index.html
-          grep -q 'POLL_MS = 15000' index.html
+          grep -q 'setInterval(refresh,15000)' index.html
       - name: Configure Pages
         uses: actions/configure-pages@v5
       - name: Upload site

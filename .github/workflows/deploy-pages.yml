@@ -1,14 +1,14 @@
-name: Deploy signal sandbox
+name: Deploy signal display preview
 on:
   push:
-    branches: [main]
+    branches: [signal-display-preview]
   workflow_dispatch:
 permissions:
   contents: read
   pages: write
   id-token: write
 concurrency:
-  group: pages
+  group: signal-display-preview-pages
   cancel-in-progress: true
 jobs:
   deploy:
@@ -19,12 +19,13 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-      - name: Validate sandbox page
+      - name: Validate preview
         run: |
           test -s index.html
-          grep -q 'MraJJqq/Vegasbark/main/public/signals.json' index.html
-          grep -q 'schema_version !== 1' index.html
-          grep -q 'setInterval(refresh,15000)' index.html
+          grep -q 'display:flex' index.html
+          grep -q 'justify-content:flex-end' index.html
+          grep -q 'signal-separator' index.html
+          grep -q 'background:transparent' index.html
       - name: Configure Pages
         uses: actions/configure-pages@v5
       - name: Upload site
